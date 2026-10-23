@@ -147,10 +147,14 @@ struct ContentView: View {
                 return
             }
             s.deviceId = addr.deviceId
+            s.deviceMac = addr.mac
             s.credentialId = addr.credentialId
             s.chainKey = addr.chainKey
+            // ★ projectId 不是服务器直接给的字段，是 Android 版"自动获取参数"按钮的隐藏逻辑：
+            //   projectId 其实就是登录时拿到的 serverAppId (这里=21048)，不是用户瞎填的。
+            s.projectId = s.serverAppId.isEmpty ? s.projectId : (Int32(s.serverAppId) ?? s.projectId)
             loadSettings()
-            fetchStatus = "✓ 已获取: \(addr.buildingName)\(addr.floorName)\(addr.roomName) (device=\(addr.deviceId))"
+            fetchStatus = "✓ 已获取: \(addr.buildingName)\(addr.floorName)\(addr.roomName) (device=\(addr.deviceId), projectId=\(s.projectId))"
         } catch {
             fetchStatus = "拉取失败: \(error.localizedDescription)"
         }
