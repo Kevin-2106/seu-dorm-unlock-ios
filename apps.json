@@ -7,7 +7,7 @@
   "apps": [
     {
       "name": "门钥",
-      "bundleIdentifier": "com.selfuse.doorunlock",
+      "bundleIdentifier": "io.github.kevin-2106.doorkey",
       "developerName": "Kevin-2106",
       "subtitle": "住理生活门锁的非官方 iOS 客户端",
       "localizedDescription": "用你自己的账号换取你自己门锁的开门凭据，通过蓝牙 / NFC 开门；支持锁屏小组件、锁屏控制和 Action 按钮。与官方 App 及其厂商无关。",
@@ -15,20 +15,20 @@
       "tintColor": "3478F6",
       "versions": [
         {
-          "version": "1.1.0",
-          "buildVersion": "2610231819",
-          "date": "2026-10-23T18:20:03Z",
-          "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.1.0/DoorUnlock-v1.1.0.ipa",
-          "size": 1453455,
+          "version": "1.2.0",
+          "buildVersion": "2610231832",
+          "date": "2026-10-23T18:33:43Z",
+          "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.2.0/DoorUnlock-v1.2.0.ipa",
+          "size": 1453508,
           "minOSVersion": "15.0",
-          "localizedDescription": "v1.1.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.1.0"
+          "localizedDescription": "v1.2.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.0"
         }
       ],
-      "version": "1.1.0",
-      "versionDate": "2026-10-23T18:20:03Z",
-      "versionDescription": "v1.1.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.1.0",
-      "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.1.0/DoorUnlock-v1.1.0.ipa",
-      "size": 1453455
+      "version": "1.2.0",
+      "versionDate": "2026-10-23T18:33:43Z",
+      "versionDescription": "v1.2.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.0",
+      "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.2.0/DoorUnlock-v1.2.0.ipa",
+      "size": 1453508
     }
   ],
   "news": []
