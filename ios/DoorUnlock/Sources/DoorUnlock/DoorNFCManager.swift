@@ -61,12 +61,9 @@ final class DoorNFCManager: NSObject, ObservableObject {
                     }
                 }
             }
-        case .iso7816Compatible(let t):
-            // ISO7816Tag 没有 sendMiFareCommand，只能发标准 APDU；0xB1 帧不是 APDU 封装，
-            // 这个分支基本不会命中 (门锁没有 ISO7816 applet)，留着只是让枚举 switch 完整。
-            _ = t
-            return nil
         default:
+            // 其余 case (iso7816Compatible/feliCa/iso15693) 都没有 sendMiFareCommand，
+            // 也不是这把锁的 tag 类型 (门锁没有 ISO7816 applet，不是 FeliCa/15693)。
             return nil
         }
     }
@@ -75,7 +72,6 @@ final class DoorNFCManager: NSObject, ObservableObject {
         let data: Data?
         switch tag {
         case .miFare(let t): data = t.identifier
-        case .iso7816Compatible(let t): data = t.identifier
         case .feliCa(let t): data = t.currentIDm
         case .iso15693(let t): data = t.identifier
         @unknown default: data = nil
