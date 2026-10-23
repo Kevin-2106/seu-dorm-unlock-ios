@@ -198,8 +198,10 @@ enum Haptics {
 /// 陀螺仪倾斜量 (归一化到大约 -1...1)。用重力向量而不是姿态角：
 /// 手拿在手里的"自然姿势"附近比较稳，不会在竖直握持时抖。
 final class MotionManager: ObservableObject {
-    @Published var x: Double = 0   // 左右倾斜
+    @Published var x: Double = 0   // 左右倾斜 (相对"自然握持姿势"的偏移，给视差用)
     @Published var y: Double = 0   // 前后倾斜
+    @Published var gx: Double = 0  // 重力在屏幕平面上的投影，向右为正 (给圆环亮端指向用)
+    @Published var gy: Double = 0  // 向下为正；竖直握持 ≈ +1，平放 ≈ 0
 
     private let manager = CMMotionManager()
 
@@ -213,6 +215,9 @@ final class MotionManager: ObservableObject {
             let targetY = max(-1, min(1, (g.y + 0.7) * 2.0))
             self.x = self.x * 0.85 + targetX * 0.15   // 低通滤波
             self.y = self.y * 0.85 + targetY * 0.15
+            // 设备坐标 y 轴朝上，所以屏幕坐标下的"向下"= -gravity.y
+            self.gx = self.gx * 0.8 + g.x * 0.2
+            self.gy = self.gy * 0.8 + (-g.y) * 0.2
         }
     }
 
@@ -259,8 +264,19 @@ struct AnimScope<Content: View>: View, Animatable {
 
 // MARK: - 粒子
 
-/// 空间感粒子: 不同"深度"的尘埃缓慢上飘，深度越大越亮越大，随陀螺仪做视差；
-/// 蓄力时向按钮中心汇聚并旋转，成功时向外炸开。
+/// 跃迁粒子的相位时钟。相位必须是"累积"出来的 (速度变化时位置才连续)，
+/// 不能直接用 t * 速度 —— 速度一变，所有粒子会瞬间跳位。引用类型，由 HomeView 持有。
+final class WarpClock {
+    var phase: Double = 0
+    var last: Double = 0
+}
+
+/// 两层粒子:
+/// 1. 环境尘埃: 不同"深度"缓慢上飘，随陀螺仪视差；进入按钮区域会淡出
+///    (否则按钮是透明样式时，能看到粒子在按钮后面)。
+/// 2. 跃迁粒子 (蓄力时): 从圆环外缘"出生"，沿径向加速飞出屏幕、飞出后在圆环处重生 ——
+///    新粒子出现、旧粒子出屏幕消失，不会出现在按钮背后，也没有"整块屏幕形粒子云旋转收缩"的问题。
+///    蓄力越深速度越快、拖尾越长；成功时(pulse)拖尾爆发一下再收。
 struct ParticleCanvas: View {
     let charge: Double
     let pulse: Double
@@ -268,62 +284,121 @@ struct ParticleCanvas: View {
     let tiltX: Double
     let tiltY: Double
     let count: Int
+    let warpCount: Int
+    let warpSpeed: Double
+    let warpStreak: Double
     let sizeScale: Double
     let tint: Color
+    let clock: WarpClock
+
+    /// 按钮半径 (90) + 圆环外缘，尘埃在这个范围内淡出
+    private let clearInner: Double = 96
+    private let clearOuter: Double = 130
+    /// 跃迁粒子出生半径 (略大于圆环半径 104)
+    private let spawnRadius: CGFloat = 110
 
     var body: some View {
         TimelineView(.animation) { ctx in
             Canvas { gc, size in
                 let t = ctx.date.timeIntervalSinceReferenceDate
-                for i in 0..<max(0, count) {
-                    let r1 = rnd(i, 1), r2 = rnd(i, 2), r3 = rnd(i, 3), r4 = rnd(i, 4)
-                    let depth = 0.25 + 0.75 * r3
 
-                    // 基础位置: 缓慢上飘 + 轻微横向摆动
-                    var x = CGFloat(fract(r1 + sin(t * 0.12 * (0.5 + r4) + r2 * 6.283) * 0.03)) * size.width
-                    var y = CGFloat(fract(r2 - t * 0.010 * (0.4 + depth))) * size.height
-                    // 陀螺仪视差: 越近(depth 大)移动越多
-                    x -= CGFloat(tiltX * 36 * depth)
-                    y -= CGFloat(tiltY * 36 * depth)
+                // 累积相位 (限制单帧最大步长，避免切后台回来时跳变)
+                let dt = clock.last == 0 ? 0 : min(0.1, t - clock.last)
+                clock.last = t
+                let speedNow = warpSpeed * (2.2 * charge * charge + 3.5 * pulse)
+                clock.phase += dt * (0.10 + speedNow)
 
-                    var dx = x - center.x
-                    var dy = y - center.y
-
-                    // 蓄力: 向按钮中心汇聚并旋转
-                    if charge > 0.001 {
-                        let pull = CGFloat(charge * charge * 0.85)
-                        let ang = charge * (0.7 + 0.8 * depth)
-                        let ca = CGFloat(cos(ang)), sa = CGFloat(sin(ang))
-                        let rx = dx * ca - dy * sa
-                        let ry = dx * sa + dy * ca
-                        dx = rx * (1 - pull)
-                        dy = ry * (1 - pull)
-                    }
-                    // 成功: 向外炸开
-                    if pulse > 0.001 {
-                        let push = CGFloat(1 + pulse * 0.7 * depth)
-                        dx *= push
-                        dy *= push
-                    }
-
-                    let px = center.x + dx
-                    let py = center.y + dy
-                    let twinkle = 0.6 + 0.4 * sin(t * (0.8 + r4) + r1 * 6.283)
-                    let o = min(0.95, (0.12 + 0.5 * depth) * twinkle * (1 + charge * 0.9 + pulse * 1.2))
-                    let s = CGFloat((1.2 + 2.2 * depth) * sizeScale)
-                    let halo = s * 3.4
-
-                    gc.fill(
-                        Path(ellipseIn: CGRect(x: px - halo / 2, y: py - halo / 2, width: halo, height: halo)),
-                        with: .color(tint.opacity(o * 0.16))
-                    )
-                    gc.fill(
-                        Path(ellipseIn: CGRect(x: px - s / 2, y: py - s / 2, width: s, height: s)),
-                        with: .color(Color.white.opacity(o))
-                    )
-                }
+                drawDust(&gc, size: size, t: t)
+                drawWarp(&gc, size: size, speedNow: speedNow)
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private func drawDust(_ gc: inout GraphicsContext, size: CGSize, t: Double) {
+        let dim = 1 - 0.65 * charge   // 蓄力时尘埃让位给跃迁粒子
+        for i in 0..<max(0, count) {
+            let r1 = rnd(i, 1), r2 = rnd(i, 2), r3 = rnd(i, 3), r4 = rnd(i, 4)
+            let depth = 0.25 + 0.75 * r3
+
+            // 缓慢上飘 + 轻微横向摆动 + 陀螺仪视差 (越近 depth 越大，位移越多)
+            var x = CGFloat(fract(r1 + sin(t * 0.12 * (0.5 + r4) + r2 * 6.283) * 0.03)) * size.width
+            var y = CGFloat(fract(r2 - t * 0.010 * (0.4 + depth))) * size.height
+            x -= CGFloat(tiltX * 36 * depth)
+            y -= CGFloat(tiltY * 36 * depth)
+
+            var dx = x - center.x
+            var dy = y - center.y
+            if pulse > 0.001 {   // 成功: 向外一推
+                let push = CGFloat(1 + pulse * 0.7 * depth)
+                dx *= push
+                dy *= push
+            }
+            let px = center.x + dx
+            let py = center.y + dy
+
+            // 按钮区域内淡出
+            let dist = Double(hypot(px - center.x, py - center.y))
+            let clear = smoothstep(clearInner, clearOuter, dist)
+            if clear < 0.01 { continue }
+
+            let twinkle = 0.6 + 0.4 * sin(t * (0.8 + r4) + r1 * 6.283)
+            let o = min(0.95, (0.12 + 0.5 * depth) * twinkle * (1 + pulse * 1.2)) * dim * clear
+            let s = CGFloat((1.2 + 2.2 * depth) * sizeScale)
+            let halo = s * 3.4
+
+            gc.fill(
+                Path(ellipseIn: CGRect(x: px - halo / 2, y: py - halo / 2, width: halo, height: halo)),
+                with: .color(tint.opacity(o * 0.16))
+            )
+            gc.fill(
+                Path(ellipseIn: CGRect(x: px - s / 2, y: py - s / 2, width: s, height: s)),
+                with: .color(Color.white.opacity(o))
+            )
+        }
+    }
+
+    private func drawWarp(_ gc: inout GraphicsContext, size: CGSize, speedNow: Double) {
+        let visible = max(smoothstep(0.0, 0.18, charge), pulse)
+        guard visible > 0.01, warpCount > 0 else { return }
+
+        // 灭点随手机倾斜轻微偏移，增加透视感
+        let vp = CGPoint(x: center.x - CGFloat(tiltX * 18), y: center.y - CGFloat(tiltY * 18))
+        let maxR = max(
+            hypot(vp.x, vp.y),
+            hypot(size.width - vp.x, vp.y),
+            hypot(vp.x, size.height - vp.y),
+            hypot(size.width - vp.x, size.height - vp.y)
+        ) * 1.05
+        let span = maxR - spawnRadius
+
+        // 拖尾长度占"寿命进度"的比例: 速度越快越长
+        let streakU = min(0.3, 0.015 + 0.05 * speedNow * warpStreak)
+
+        for j in 0..<warpCount {
+            let a1 = rnd(j, 11), a2 = rnd(j, 12), a3 = rnd(j, 13)
+            let theta = a1 * 2 * Double.pi
+            let life = 0.7 + a2 * 0.9                 // 寿命不同 → 每颗速度不同，层次感
+            let u = fract(clock.phase / life + a3)    // 0=刚在圆环出生, 1=飞出屏幕
+            let u0 = max(0, u - streakU)
+
+            // 半径随进度二次以上增长: 先慢后快，像迎面飞来 (非线性)
+            let r1 = spawnRadius + span * CGFloat(pow(u, 2.2))
+            let r0 = spawnRadius + span * CGFloat(pow(u0, 2.2))
+            let dirX = CGFloat(cos(theta)), dirY = CGFloat(sin(theta))
+            let p1 = CGPoint(x: vp.x + dirX * r1, y: vp.y + dirY * r1)
+            let p0 = CGPoint(x: vp.x + dirX * r0, y: vp.y + dirY * r0)
+
+            // 出生时透明渐显 (从圆环"长"出来)，临近出屏时淡出
+            let o = smoothstep(0.0, 0.10, u) * (1 - smoothstep(0.82, 1.0, u)) * visible * (0.35 + 0.65 * a2)
+            if o < 0.01 { continue }
+            let w = CGFloat((0.8 + 2.6 * pow(u, 1.5)) * sizeScale)
+
+            var path = Path()
+            path.move(to: p0)
+            path.addLine(to: p1)
+            gc.stroke(path, with: .color(tint.opacity(o * 0.28)), style: StrokeStyle(lineWidth: w * 3, lineCap: .round))
+            gc.stroke(path, with: .color(Color.white.opacity(o)), style: StrokeStyle(lineWidth: w, lineCap: .round))
+        }
     }
 }

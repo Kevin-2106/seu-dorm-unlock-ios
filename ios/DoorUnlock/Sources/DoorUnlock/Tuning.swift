@@ -62,6 +62,9 @@ final class Tuning: ObservableObject {
     // ─── 粒子 ───
     @Published var particleCount: Double { didSet { d.set(particleCount, forKey: "tn_particleCount") } }
     @Published var particleSize: Double { didSet { d.set(particleSize, forKey: "tn_particleSize") } }
+    @Published var warpCount: Double { didSet { d.set(warpCount, forKey: "tn_warpCount") } }
+    @Published var warpSpeed: Double { didSet { d.set(warpSpeed, forKey: "tn_warpSpeed") } }
+    @Published var warpStreak: Double { didSet { d.set(warpStreak, forKey: "tn_warpStreak") } }
 
     // ─── 震动 ───
     @Published var hapticsOn: Bool { didSet { d.set(hapticsOn, forKey: "tn_hapticsOn") } }
@@ -92,6 +95,9 @@ final class Tuning: ObservableObject {
         rippleOpacity = Self.num("tn_rippleOpacity", 0.8)
         particleCount = Self.num("tn_particleCount", 60)
         particleSize = Self.num("tn_particleSize", 1.0)
+        warpCount = Self.num("tn_warpCount", 90)
+        warpSpeed = Self.num("tn_warpSpeed", 1.0)
+        warpStreak = Self.num("tn_warpStreak", 1.0)
         hapticsOn = Self.flag("tn_hapticsOn", true)
         hSearchIntensity = Self.num("tn_hSearchIntensity", 0.6)
         hSearchSharpness = Self.num("tn_hSearchSharpness", 0.3)
@@ -106,6 +112,7 @@ final class Tuning: ObservableObject {
         chargeSeconds = 2.5; dim = 0.5; bloom = 1.0; rgbSplit = 3.0; flash = 0.35
         rippleCount = 3; rippleSpeed = 0.6; rippleDistance = 0.5; rippleOpacity = 0.8
         particleCount = 60; particleSize = 1.0
+        warpCount = 90; warpSpeed = 1.0; warpStreak = 1.0
         hapticsOn = true; hSearchIntensity = 0.6; hSearchSharpness = 0.3
         hSuccessIntensity = 1.0; hFailIntensity = 1.0
     }

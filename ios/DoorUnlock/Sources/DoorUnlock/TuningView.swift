@@ -42,8 +42,11 @@ struct TuningView: View {
             }
 
             Section("粒子") {
-                SliderRow(title: "数量 (0 = 关闭)", value: $tuning.particleCount, range: 0...150, format: "%.0f")
-                SliderRow(title: "大小", value: $tuning.particleSize, range: 0.4...2.5)
+                SliderRow(title: "环境尘埃数量 (0 = 关闭)", value: $tuning.particleCount, range: 0...150, format: "%.0f")
+                SliderRow(title: "粒子大小", value: $tuning.particleSize, range: 0.4...2.5)
+                SliderRow(title: "跃迁粒子数量 (蓄力时, 0 = 关闭)", value: $tuning.warpCount, range: 0...250, format: "%.0f")
+                SliderRow(title: "跃迁速度", value: $tuning.warpSpeed, range: 0.2...3)
+                SliderRow(title: "跃迁拖尾长度", value: $tuning.warpStreak, range: 0...3)
             }
 
             Section {

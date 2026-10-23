@@ -24,6 +24,7 @@ struct HomeView: View {
     @ObservedObject private var background = BackgroundImageStore.shared
     @ObservedObject private var tuning = Tuning.shared
     @StateObject private var motion = MotionManager()
+    @State private var warpClock = WarpClock()   // 引用类型，跃迁粒子的累积相位
 
     @State private var showSettings = false
     @State private var breathe = false        // 待机呼吸光晕
@@ -203,8 +204,12 @@ struct HomeView: View {
                     tiltX: motion.x * tuning.tilt,
                     tiltY: motion.y * tuning.tilt,
                     count: Int(tuning.particleCount),
+                    warpCount: Int(tuning.warpCount),
+                    warpSpeed: tuning.warpSpeed,
+                    warpStreak: tuning.warpStreak,
                     sizeScale: tuning.particleSize,
-                    tint: buttonTint
+                    tint: buttonTint,
+                    clock: warpClock
                 )
             }
         }
@@ -308,11 +313,17 @@ struct HomeView: View {
         return (Double(r), Double(g), Double(b))
     }
 
-    /// 圆环渐变的"彗星"角度跟随陀螺仪倾斜方向，叠一点缓慢摆动保持待机的生命感
-    private func ringAngle(t: Double) -> Double {
-        var a = atan2(motion.y, motion.x) * 180 / .pi
+    /// 圆环亮端朝向"真实重力方向" (屏幕平面上的投影)：竖直拿着亮端在下，
+    /// 旋转手机亮端始终朝向地面；不再有任何自转/摆动。
+    private var gravityAngle: Double {
+        var a = atan2(motion.gy, motion.gx) * 180 / .pi
         if tuning.ringInvert { a += 180 }
-        return a + 26 * sin(t * 0.6)
+        return a
+    }
+
+    /// 重力在屏幕平面上的投影越小 (手机平放)，方向越不可靠，高亮随之减弱、圆环趋于均匀
+    private var gravityStrength: Double {
+        smoothstep(0.10, 0.50, Double(hypot(motion.gx, motion.gy)))
     }
 
     /// channel: nil=正常色; 0/1/2 = 只保留 R/G/B 通道 (用于 RGB 分离，三个通道叠加还原原色)
@@ -328,17 +339,22 @@ struct HomeView: View {
         }
         let k = tuning.ringIntensity
         let w = CGFloat(tuning.ringWidth)
+        // 对称渐变: 起点方向(3 点钟)是亮端，向两侧平滑衰减，背面最暗；
+        // 整体再旋转到重力方向。亮端强度随重力投影大小变化。
+        let peak = 0.35 + 0.65 * gravityStrength
         return ZStack {
             Circle().strokeBorder(col(tr, tg, tb, 0.22 * k), lineWidth: w * 0.6)
             Circle()
                 .strokeBorder(
                     AngularGradient(
                         gradient: Gradient(stops: [
-                            .init(color: col(tr, tg, tb, 0.0), location: 0.0),
-                            .init(color: col(tr, tg, tb, 0.9 * k), location: 0.50),
-                            .init(color: col(1, 1, 1, 0.9 * k), location: 0.68),
-                            .init(color: col(tr, tg, tb, 0.0), location: 0.70),
-                            .init(color: col(tr, tg, tb, 0.0), location: 1.0)
+                            .init(color: col(1, 1, 1, 0.90 * k * peak), location: 0.00),
+                            .init(color: col(tr, tg, tb, 0.95 * k * peak), location: 0.08),
+                            .init(color: col(tr, tg, tb, 0.35 * k * peak), location: 0.30),
+                            .init(color: col(tr, tg, tb, 0.05 * k), location: 0.50),
+                            .init(color: col(tr, tg, tb, 0.35 * k * peak), location: 0.70),
+                            .init(color: col(tr, tg, tb, 0.95 * k * peak), location: 0.92),
+                            .init(color: col(1, 1, 1, 0.90 * k * peak), location: 1.00)
                         ]),
                         center: .center
                     ),
@@ -350,7 +366,7 @@ struct HomeView: View {
 
     private func ringLayer(t: Double, c: Double) -> some View {
         let d = tuning.rgbSplit * pow(c, 1.4)
-        let angle = ringAngle(t: t)
+        let angle = gravityAngle
         let jitter = sin(t * 38) * 0.3 * d
         return ZStack {
             if d > 0.15 {
