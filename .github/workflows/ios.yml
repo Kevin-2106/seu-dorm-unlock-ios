@@ -13,8 +13,14 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 查看默认 Xcode 版本
-        run: xcodebuild -version
+      - name: 切换到最新可用 Xcode (XcodeGen 生成的项目格式可能比默认 Xcode 新)
+        run: |
+          ls /Applications | grep -i Xcode
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            sudo xcode-select -s "$LATEST"
+          fi
+          xcodebuild -version
 
       - name: 安装 XcodeGen
         run: brew install xcodegen
