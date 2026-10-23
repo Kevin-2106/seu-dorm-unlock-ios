@@ -8,6 +8,24 @@ struct TuningView: View {
     var body: some View {
         Form {
             Section {
+                HStack(spacing: 10) {
+                    ForEach(Tuning.Preset.allCases) { preset in
+                        Button(preset.rawValue) { tuning.apply(preset) }
+                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            } header: {
+                Text("动效预设")
+            } footer: {
+                Text("一键设置蓄力、涟漪、粒子、视差等动效强度；按钮样式、背景、震动不受影响。选完仍可在下面的子页里微调。")
+            }
+            Section {
+                Toggle("低电量 / 减弱动态时自动精简", isOn: $tuning.autoReduce)
+            } footer: {
+                Text("开启后，系统开了低电量模式或「减弱动态效果」时，首页自动关闭粒子、涟漪、陀螺仪视差和 RGB 分离，更省电，也更照顾晕动症。")
+            }
+            Section {
                 NavigationLink("按钮与圆环") { TuningButtonView() }
                 NavigationLink("开门动效") { TuningEffectsView() }
                 NavigationLink("震动") { TuningHapticsView() }

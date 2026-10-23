@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var warpClock = WarpClock()   // 引用类型，跃迁粒子的累积相位
 
     @State private var showSettings = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var isRefreshingCredentials = false
     @State private var refreshNote = ""
     @State private var breathe = false        // 待机呼吸光晕
@@ -44,6 +46,10 @@ struct HomeView: View {
     private var busy: Bool {
         ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking
     }
+
+    /// 低电量 / 减弱动态效果时精简动效 (可在 视觉与震动调节 里关掉这个行为)
+    private var reduced: Bool { tuning.autoReduce && (reduceMotion || lowPower) }
+    private var tiltK: Double { reduced ? 0 : tuning.tilt }
 
     private var look: ButtonLook { ButtonLook(rawValue: tuning.buttonLook) ?? .glassSolid }
 
@@ -77,8 +83,14 @@ struct HomeView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(ble: ble, nfc: nfc)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+        .onChange(of: reduced) { r in
+            if r { motion.stop() } else { motion.start() }
+        }
         .onAppear {
-            motion.start()
+            if !reduced { motion.start() }
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
                 breathe = true
             }
@@ -114,7 +126,7 @@ struct HomeView: View {
             case .failed:
                 Haptics.searchStop()
                 Haptics.failure()
-                withAnimation(.linear(duration: 0.5)) { shakes += 2 }
+                if !reduced { withAnimation(.linear(duration: 0.5)) { shakes += 2 } }
                 flash(.red, times: 2)
             default:
                 break
@@ -127,7 +139,7 @@ struct HomeView: View {
                 flash(.green, times: 1)
             } else if text.hasPrefix("开门失败") || text.hasPrefix("门锁无响应") {
                 Haptics.failure()
-                withAnimation(.linear(duration: 0.5)) { shakes += 2 }
+                if !reduced { withAnimation(.linear(duration: 0.5)) { shakes += 2 } }
                 flash(.red, times: 2)
             }
         }
@@ -178,8 +190,9 @@ struct HomeView: View {
                         Image(uiImage: img)
                             .resizable()
                             .scaledToFill()
+                            .blur(radius: tuning.bgBlur)
                             .scaleEffect(1.12)
-                            .offset(x: CGFloat(-motion.x * 14 * tuning.tilt), y: CGFloat(-motion.y * 14 * tuning.tilt))
+                            .offset(x: CGFloat(-motion.x * 14 * tiltK), y: CGFloat(-motion.y * 14 * tiltK))
                     )
                     .clipped()
                     .overlay(
@@ -188,6 +201,7 @@ struct HomeView: View {
                             startPoint: .top, endPoint: .bottom
                         )
                     )
+                    .overlay(Color.black.opacity(tuning.bgDim))
             } else {
                 LinearGradient(
                     colors: [Color(red: 0.05, green: 0.07, blue: 0.12), Color(red: 0.1, green: 0.13, blue: 0.22)],
@@ -207,10 +221,10 @@ struct HomeView: View {
                     charge: max(0, min(1, c)),
                     pulse: max(0, min(1, p)),
                     center: center,
-                    tiltX: motion.x * tuning.tilt,
-                    tiltY: motion.y * tuning.tilt,
-                    count: Int(tuning.particleCount),
-                    warpCount: Int(tuning.warpCount),
+                    tiltX: motion.x * tiltK,
+                    tiltY: motion.y * tiltK,
+                    count: reduced ? 0 : Int(tuning.particleCount),
+                    warpCount: reduced ? 0 : Int(tuning.warpCount),
                     warpSpeed: tuning.warpSpeed,
                     warpStreak: tuning.warpStreak,
                     sizeScale: tuning.particleSize,
@@ -280,7 +294,7 @@ struct HomeView: View {
     }
 
     private func clusterBody(t: Double, c: Double) -> some View {
-        let k = tuning.tilt
+        let k = tiltK
         // 视差: 光晕在"远处"(反向小幅漂移)，圆环/按钮在"近处"(同向)，层与层之间有相对位移
         let farOffset = CGSize(width: -motion.x * 12 * k, height: -motion.y * 12 * k)
         let ringOffset = CGSize(width: motion.x * 5 * k, height: motion.y * 5 * k)
@@ -299,7 +313,7 @@ struct HomeView: View {
         ZStack {
             Circle()
                 .fill(buttonTint.opacity(0.35 + 0.25 * c))
-                .frame(width: (breathe ? 230 : 195) - 40 * c, height: (breathe ? 230 : 195) - 40 * c)
+                .frame(width: ((breathe && !reduced) ? 230 : 195) - 40 * c, height: ((breathe && !reduced) ? 230 : 195) - 40 * c)
                 .blur(radius: 26)
                 .opacity(busy ? 0.95 : 0.55)
             // 蓄力 bloom: 越蓄越亮的一团泛光
@@ -371,7 +385,7 @@ struct HomeView: View {
     }
 
     private func ringLayer(t: Double, c: Double) -> some View {
-        let d = tuning.rgbSplit * pow(c, 1.4)
+        let d = (reduced ? 0 : tuning.rgbSplit) * pow(c, 1.4)
         let angle = gravityAngle
         let jitter = sin(t * 38) * 0.3 * d
         return ZStack {
@@ -398,7 +412,7 @@ struct HomeView: View {
     /// 每道波: 从圆环的位置出发，一开始完全透明 → 离开圆环一小段后渐显 → 再渐隐消失；
     /// 半径用 ease-out (先快后慢)，透明度用 smoothstep，全程非线性。
     private func rippleLayer(t: Double) -> some View {
-        let n = max(0, Int(tuning.rippleCount.rounded()))
+        let n = reduced ? 0 : max(0, Int(tuning.rippleCount.rounded()))
         return ZStack {
             ForEach(0..<n, id: \.self) { i in
                 ripple(index: i, of: n, t: t)
@@ -504,7 +518,7 @@ struct HomeView: View {
                     Circle()
                         .fill(RadialGradient(colors: [.white.opacity(0.30), .clear], center: .center, startRadius: 0, endRadius: 60))
                         .frame(width: 120, height: 120)
-                        .offset(x: CGFloat(motion.x * 34 * tuning.tilt), y: CGFloat(motion.y * 34 * tuning.tilt) - 14)
+                        .offset(x: CGFloat(motion.x * 34 * tiltK), y: CGFloat(motion.y * 34 * tiltK) - 14)
                 }
                 .frame(width: 156, height: 156)
                 .clipShape(Circle())
@@ -526,7 +540,7 @@ struct HomeView: View {
     }
 
     private func labelView(c: Double, t: Double) -> some View {
-        let d = tuning.rgbSplit * pow(c, 1.4)
+        let d = (reduced ? 0 : tuning.rgbSplit) * pow(c, 1.4)
         let jitter = sin(t * 38) * 0.3 * d
         return ZStack {
             if d > 0.15 {

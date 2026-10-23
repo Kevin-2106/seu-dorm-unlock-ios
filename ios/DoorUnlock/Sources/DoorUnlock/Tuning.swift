@@ -66,6 +66,15 @@ final class Tuning: ObservableObject {
     @Published var warpSpeed: Double { didSet { d.set(warpSpeed, forKey: "tn_warpSpeed") } }
     @Published var warpStreak: Double { didSet { d.set(warpStreak, forKey: "tn_warpStreak") } }
 
+    // ─── 背景图 ───
+    /// 额外压暗 (叠在默认暗角遮罩上)，亮图上白字看不清时调大
+    @Published var bgDim: Double { didSet { d.set(bgDim, forKey: "tn_bgDim") } }
+    /// 背景图模糊半径 (pt)
+    @Published var bgBlur: Double { didSet { d.set(bgBlur, forKey: "tn_bgBlur") } }
+
+    /// 低电量模式 / 系统「减弱动态效果」开启时，自动关掉粒子、涟漪、视差、RGB 分离
+    @Published var autoReduce: Bool { didSet { d.set(autoReduce, forKey: "tn_autoReduce") } }
+
     // ─── 震动 ───
     @Published var hapticsOn: Bool { didSet { d.set(hapticsOn, forKey: "tn_hapticsOn") } }
     @Published var hSearchIntensity: Double { didSet { d.set(hSearchIntensity, forKey: "tn_hSearchIntensity") } }
@@ -98,6 +107,9 @@ final class Tuning: ObservableObject {
         warpCount = Self.num("tn_warpCount", 90)
         warpSpeed = Self.num("tn_warpSpeed", 1.0)
         warpStreak = Self.num("tn_warpStreak", 1.0)
+        bgDim = Self.num("tn_bgDim", 0)
+        bgBlur = Self.num("tn_bgBlur", 0)
+        autoReduce = Self.flag("tn_autoReduce", true)
         hapticsOn = Self.flag("tn_hapticsOn", true)
         hSearchIntensity = Self.num("tn_hSearchIntensity", 0.6)
         hSearchSharpness = Self.num("tn_hSearchSharpness", 0.3)
@@ -105,9 +117,33 @@ final class Tuning: ObservableObject {
         hFailIntensity = Self.num("tn_hFailIntensity", 1.0)
     }
 
+    enum Preset: String, CaseIterable, Identifiable {
+        case calm = "克制", standard = "标准", flashy = "炫酷"
+        var id: String { rawValue }
+    }
+
+    /// 只改动效相关的参数，不动按钮样式、背景、震动开关
+    func apply(_ p: Preset) {
+        switch p {
+        case .calm:
+            tilt = 0.3; chargeSeconds = 1.5; dim = 0.35; bloom = 0.4; rgbSplit = 0; flash = 0.2
+            rippleCount = 1; rippleOpacity = 0.5
+            particleCount = 20; warpCount = 0
+        case .standard:
+            tilt = 0.6; chargeSeconds = 2.5; dim = 0.5; bloom = 1.0; rgbSplit = 3.0; flash = 0.35
+            rippleCount = 3; rippleOpacity = 0.8
+            particleCount = 60; warpCount = 90
+        case .flashy:
+            tilt = 1.0; chargeSeconds = 3.0; dim = 0.6; bloom = 1.5; rgbSplit = 5.0; flash = 0.5
+            rippleCount = 4; rippleOpacity = 1.0
+            particleCount = 110; warpCount = 180
+        }
+    }
+
     func reset() {
         buttonLook = 0; fillOpacity = 0.9; ringWidth = 2.5; ringIntensity = 1.0; ringInvert = false
         glassTint = 0.15; clearBacking = 0.18
+        bgDim = 0; bgBlur = 0; autoReduce = true
         tilt = 0.6
         chargeSeconds = 2.5; dim = 0.5; bloom = 1.0; rgbSplit = 3.0; flash = 0.35
         rippleCount = 3; rippleSpeed = 0.6; rippleDistance = 0.5; rippleOpacity = 0.8
