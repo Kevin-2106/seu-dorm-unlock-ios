@@ -54,7 +54,7 @@ iOS 18 及以上还可以把锁屏左下 / 右下角的按钮换成「门钥 · 
 
 ## 安装
 
-> 📦 构建产物放在 [Releases](../../releases) 里（当前 [v1.0.0](../../releases/tag/v1.0.0)）。想自己构建，见 [docs/BUILD.md](docs/BUILD.md)。
+> 📦 构建产物放在 [Releases](../../releases) 里（当前 [v1.1.0](../../releases/tag/v1.1.0)）。想自己构建，见 [docs/BUILD.md](docs/BUILD.md)。
 
 本项目是 `.ipa` 文件，需要**侧载**。分两步：
 
