@@ -8,7 +8,6 @@ struct SettingsView: View {
     @ObservedObject var nfc: DoorNFCManager
     @ObservedObject private var background = BackgroundImageStore.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var pickedPhotoItem: PhotosPickerItem?
 
     @State private var deviceIdText: String
     @State private var projectIdText: String
@@ -78,17 +77,7 @@ struct SettingsView: View {
 
                 Section("首页背景") {
                     if #available(iOS 16.0, *) {
-                        PhotosPicker(selection: $pickedPhotoItem, matching: .images) {
-                            Label("选择背景图片", systemImage: "photo")
-                        }
-                        .onChange(of: pickedPhotoItem) { newItem in
-                            Task {
-                                guard let item = newItem,
-                                      let data = try? await item.loadTransferable(type: Data.self),
-                                      let uiImage = UIImage(data: data) else { return }
-                                background.save(uiImage)
-                            }
-                        }
+                        BackgroundPickerRow()
                     } else {
                         Text("自定义背景需要 iOS 16 及以上").font(.caption).foregroundStyle(.secondary)
                     }
@@ -199,5 +188,28 @@ struct SettingsView: View {
             fetchStatus = "拉取失败: \(error.localizedDescription)"
         }
         isFetching = false
+    }
+}
+
+/// PhotosPickerItem 这个类型本身标了 @available(iOS 16, *)，哪怕只是当一个
+/// @State 属性的类型声明，也会在 iOS15 部署目标下报 "only available in iOS 16"。
+/// 拆成单独一个同样打了 @available 的子 View，SettingsView 那边只在
+/// `if #available(iOS 16, *)` 分支里构造它，这样 iOS16 以下的类型检查完全碰不到它。
+@available(iOS 16.0, *)
+private struct BackgroundPickerRow: View {
+    @State private var pickedItem: PhotosPickerItem?
+
+    var body: some View {
+        PhotosPicker(selection: $pickedItem, matching: .images) {
+            Label("选择背景图片", systemImage: "photo")
+        }
+        .onChange(of: pickedItem) { newItem in
+            Task {
+                guard let item = newItem,
+                      let data = try? await item.loadTransferable(type: Data.self),
+                      let uiImage = UIImage(data: data) else { return }
+                BackgroundImageStore.shared.save(uiImage)
+            }
+        }
     }
 }
