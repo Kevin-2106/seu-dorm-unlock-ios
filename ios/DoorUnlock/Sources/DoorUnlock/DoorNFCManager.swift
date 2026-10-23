@@ -5,9 +5,8 @@ import CoreNFC
 ///
 /// Android 实测结论: 门锁感应区是 ISO14443-A Type 2 标签 (ATQA=4400/SAK=0)，
 /// 无 IsoDep，不走 ISO7816 封装，官方协议是对 NfcA 发裸帧。iOS 对应能力是
-/// `NFCISO14443Tag.sendMiFareCommand` / `NFCMiFareTag.sendMiFareCommand` ——
-/// 两者语义等价 (ISO14443-3 层裸帧收发)，具体落在哪个 case 取决于系统对标签
-/// 芯片 (常见是 NTAG21x 系列) 的分类，所以两种 tag case 都处理。
+/// `NFCMiFareTag.sendMiFareCommand` (ISO14443-3 层裸帧收发，语义等价于 NfcA.transceive)。
+/// 门锁大概率会被系统分类进 NFCTag 枚举的 `.miFare` case (常见如 NTAG21x 系列芯片)。
 @MainActor
 final class DoorNFCManager: NSObject, ObservableObject {
 
@@ -45,17 +44,15 @@ final class DoorNFCManager: NSObject, ObservableObject {
         s?.begin()
     }
 
-    // ─── 把两种 tag case 的 sendMiFareCommand 统一成一个闭包 ───
+    // ─── 把 tag case 的 sendMiFareCommand 统一成一个闭包 ───
+    //
+    // CoreNFC 的 NFCTag 枚举是 .feliCa / .iso15693 / .iso7816Compatible / .miFare，
+    // 没有通用的 .iso14443 case —— 那是 NFCTagReaderSession.PollingOption 的成员，
+    // 跟这里是两个不同的枚举，之前搞混了。Android 实测门锁是 ISO14443-A Type 2
+    // 标签、无 IsoDep (不支持 ISO7816-4)，这类标签 (常见如 NTAG21x) 在 CoreNFC 里
+    // 几乎总是落在 .miFare case；保留 .iso7816Compatible 分支只是兜底。
     private func makeSender(for tag: NFCTag) -> ((Data) async throws -> Data)? {
         switch tag {
-        case .iso14443(let t):
-            return { data in
-                try await withCheckedThrowingContinuation { cont in
-                    t.sendMiFareCommand(commandPacket: data) { resp, err in
-                        if let err = err { cont.resume(throwing: err) } else { cont.resume(returning: resp) }
-                    }
-                }
-            }
         case .miFare(let t):
             return { data in
                 try await withCheckedThrowingContinuation { cont in
@@ -64,6 +61,11 @@ final class DoorNFCManager: NSObject, ObservableObject {
                     }
                 }
             }
+        case .iso7816Compatible(let t):
+            // ISO7816Tag 没有 sendMiFareCommand，只能发标准 APDU；0xB1 帧不是 APDU 封装，
+            // 这个分支基本不会命中 (门锁没有 ISO7816 applet)，留着只是让枚举 switch 完整。
+            _ = t
+            return nil
         default:
             return nil
         }
@@ -72,9 +74,9 @@ final class DoorNFCManager: NSObject, ObservableObject {
     private func identifierHex(of tag: NFCTag) -> String {
         let data: Data?
         switch tag {
-        case .iso14443(let t): data = t.identifier
         case .miFare(let t): data = t.identifier
-        case .felica(let t): data = t.currentIDm
+        case .iso7816Compatible(let t): data = t.identifier
+        case .feliCa(let t): data = t.currentIDm
         case .iso15693(let t): data = t.identifier
         @unknown default: data = nil
         }
@@ -92,7 +94,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
     private func handle(tag: NFCTag, session: NFCTagReaderSession) async {
         guard let send = makeSender(for: tag) else {
-            appendLog("标签不是 ISO14443-A / MIFARE 类型 (techList 不匹配)")
+            appendLog("标签不是 MIFARE 类型 (门锁感应区应为 NTAG21x 系列，落在 .miFare case)")
             session.invalidate(errorMessage: "不支持的标签类型")
             statusText = "不支持的标签类型"
             return
