@@ -39,8 +39,17 @@ struct SettingsView: View {
         NavigationView {
             Form {
                 Section {
-                    LabeledContent("版本", value: BuildInfo.summary)
-                    LabeledContent("小组件扩展", value: BuildInfo.widgetExtensionInstalled ? "已安装" : "未安装")
+                    // LabeledContent 是 iOS 16+，主 app 还要兼容 iOS 15，用 HStack
+                    HStack {
+                        Text("版本")
+                        Spacer()
+                        Text(BuildInfo.summary).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    HStack {
+                        Text("小组件扩展")
+                        Spacer()
+                        Text(BuildInfo.widgetExtensionInstalled ? "已安装" : "未安装").foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("关于")
                 } footer: {
