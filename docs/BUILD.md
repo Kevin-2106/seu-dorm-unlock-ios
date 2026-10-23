@@ -88,16 +88,31 @@ Actions 会构建，并把 `.ipa` 作为附件创建 Release。Release 里的 `.
 
 ---
 
+## SideStore 源
+
+打 tag 发布时，CI 会把新版本写进 `source` 分支上的 `apps.json`（AltStore 格式，脚本是 `scripts/make_source.py`），保留历史版本。SideStore 用户添加
+
+```
+https://raw.githubusercontent.com/Kevin-2106/seu-dorm-unlock-ios/source/apps.json
+```
+
+就能直接安装并收到更新提示。放在单独分支，是为了不污染 `main` 的提交历史。
+
+---
+
 ## 目录结构
 
 ```
 .github/workflows/ios.yml     构建 / 签名 / 发布
 ios/DoorUnlock/
+  Package.swift               仅供 swift test 使用，不参与 App 构建
+  Tests/CryptoTests/          协议层单元测试
   project.yml                 XcodeGen 配置：主 App 与小组件扩展两个 target
   Sources/
     DoorUnlock/               主 App 的 Swift 源码
     Widget/                   小组件扩展（锁屏小组件、锁屏控制）
     DoorUnlock.entitlements   NFC entitlement
+scripts/make_source.py        生成 SideStore 源
 docs/                         这些文档
 ```
 

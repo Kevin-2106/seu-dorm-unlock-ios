@@ -51,6 +51,12 @@ TrollStore 装的 App 签名永久有效，不用刷新。
 1. 按[官方文档](https://docs.sidestore.io/)准备并安装 SideStore。
 2. 从本仓库的 [Releases](../../../releases) 下载 `.ipa`。
 3. 在 SideStore 里添加这个 `.ipa` 安装。
+
+   **或者添加源（推荐）**：SideStore → 「源」→ 右上角 `+`，填入
+   ```
+   https://raw.githubusercontent.com/Kevin-2106/seu-dorm-unlock-ios/source/apps.json
+   ```
+   之后在源里直接安装「门钥」，有新版本时会收到更新提示。源由 CI 在发布 Release 时自动更新。
 4. 桌面出现「门钥」即安装完成。
 
 注意事项：
@@ -81,7 +87,7 @@ TrollStore 装的 App 签名永久有效，不用刷新。
 
 装完后看两个地方：
 
-- **首页最底部**一行淡淡的字，形如 `v1.0 (build 22 · a1b2c3d)`：版本、构建号（GitHub Actions 的运行编号）、commit 短哈希。和 Releases 页对一下就知道装的是不是最新。
+- **首页最底部**一行淡淡的字，形如 `v1.1.0 (build 2610251530 · a1b2c3d)`：版本、构建号（构建时的 UTC 时间 `YYMMDDHHmm`）、commit 短哈希。和 Releases 页对一下就知道装的是不是最新。
 - **设置 →「关于」**：同样的版本信息，再加"小组件扩展：已安装 / 未安装"。
 
 ---
