@@ -17,10 +17,18 @@ final class DoorNFCManager: NSObject, ObservableObject {
     /// 是否处于"持续监听"模式：一次会话结束(不管成功/失败/超时)后自动开一个新会话，
     /// 体验上接近"app开着就一直能碰锁"。由 stopAutoScanning() 关掉。
     @Published private(set) var isScanning = false
+    /// 用户在系统 NFC 面板上点了取消。此后不再自动重开 (否则一取消又弹出来)，
+    /// 直到 App 回到后台再回来，或用户手动点「NFC 开门」。
+    var userDismissed = false
 
     private var session: NFCTagReaderSession?
     private var autoRestartEnabled = false
     private var restartTask: Task<Void, Never>?
+
+    override init() {
+        super.init()
+        if !isAvailable { statusText = "NFC 不可用" }
+    }
 
     private func appendLog(_ msg: String) {
         log.append(msg)
@@ -44,6 +52,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
             return
         }
 
+        if !auto { userDismissed = false }
         restartTask?.cancel()
         autoRestartEnabled = auto
         isScanning = true
@@ -64,7 +73,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
         isScanning = false
         session?.invalidate()
         session = nil
-        statusText = "就绪"
+        statusText = isAvailable ? "就绪" : "NFC 不可用"
         appendLog("已停止自动扫描")
     }
 
@@ -210,6 +219,15 @@ extension DoorNFCManager: NFCTagReaderSessionDelegate {
         Task { @MainActor in
             self.appendLog("会话结束: \(error.localizedDescription)")
             self.session = nil
+
+            if let e = error as? NFCReaderError, e.code == .readerSessionInvalidationErrorUserCanceled {
+                self.autoRestartEnabled = false
+                self.userDismissed = true
+                self.isScanning = false
+                self.statusText = "已取消"
+                self.appendLog("用户关闭了 NFC 面板，停止自动重开")
+                return
+            }
 
             guard self.autoRestartEnabled else {
                 self.isScanning = false

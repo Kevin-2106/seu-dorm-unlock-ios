@@ -16,7 +16,7 @@ struct SettingsView: View {
                     NavigationLink { LockSettingsView() } label: {
                         row("门锁", icon: "lock.fill", detail: lockSummary)
                     }
-                    NavigationLink { OpenMethodSettingsView() } label: {
+                    NavigationLink { OpenMethodSettingsView(nfc: nfc) } label: {
                         row("开门方式", icon: "antenna.radiowaves.left.and.right", detail: "")
                     }
                     NavigationLink { AppearanceSettingsView() } label: {

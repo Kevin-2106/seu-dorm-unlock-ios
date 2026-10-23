@@ -24,6 +24,7 @@ final class SettingsManager: ObservableObject {
         static let agreedDisclaimer = "agreed_disclaimer"
         static let showLogs = "show_logs"
         static let autoNFC = "auto_nfc"
+        static let primaryMethod = "primary_method"
         static let loginPhone = "login_phone"
         static let platformToken = "platform_token"
         static let projectServerUrl = "project_server_url"
@@ -134,6 +135,13 @@ final class SettingsManager: ObservableObject {
         set { objectWillChange.send(); defaults.set(newValue, forKey: Key.autoNFC) }
     }
 
+    /// 首页大按钮、锁屏小组件/控制、快捷指令「开门」用哪种方式 (默认蓝牙)。
+    /// 另一种方式在首页底部作为小按钮备选。
+    var primaryMethod: UnlockMethod {
+        get { UnlockMethod(rawValue: defaults.string(forKey: Key.primaryMethod) ?? "") ?? .ble }
+        set { objectWillChange.send(); defaults.set(newValue.rawValue, forKey: Key.primaryMethod) }
+    }
+
     var showLogs: Bool {
         get { defaults.bool(forKey: Key.showLogs) }
         set { defaults.set(newValue, forKey: Key.showLogs) }
@@ -229,4 +237,10 @@ enum Keychain {
               let data = item as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
+}
+
+enum UnlockMethod: String, CaseIterable, Identifiable {
+    case ble, nfc
+    var id: String { rawValue }
+    var title: String { self == .ble ? "蓝牙" : "NFC" }
 }

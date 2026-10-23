@@ -34,6 +34,7 @@ struct ContentView: View {
                     startAutoNFCIfPossible()
                 case .background:
                     suppressAutoNFC = false
+                    nfc.userDismissed = false
                     // 真正退到后台才停：NFC 系统弹窗("请贴近")会让 scenePhase 短暂变成
                     // .inactive，不是真的离开 app，那种瞬时状态不处理，否则会跟弹窗自己的
                     // 生命周期打架，把刚开的会话又取消掉。
@@ -75,10 +76,15 @@ struct ContentView: View {
 
     /// 外部触发开门的统一入口 (小组件 URL / 快捷指令 App Intent / Action 按钮 / Siri)。
     private func startExternalUnlock() {
-        suppressAutoNFC = true
-        nfc.stopAutoScanning()
         let s = SettingsManager.shared
         guard s.isConfigured(), s.deviceId != 0 else { return }
+        // 主方式设为 NFC (且设备可用): 直接开 NFC 会话；已经在监听就不用管
+        if s.primaryMethod == .nfc, nfc.isAvailable {
+            if !nfc.isScanning { nfc.startUnlock(auto: false) }
+            return
+        }
+        suppressAutoNFC = true
+        nfc.stopAutoScanning()
         guard ble.state != .scanning, ble.state != .connecting, ble.state != .unlocking else { return }
         Task { await ble.unlock() }
     }
@@ -86,7 +92,7 @@ struct ContentView: View {
     /// app 一打开(或从后台回来)就自动进入 NFC 持续监听模式，
     /// 不用再手动点按钮——前提是已经配置好凭证。
     private func startAutoNFCIfPossible() {
-        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning, !suppressAutoNFC,
+        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning, !suppressAutoNFC, !nfc.userDismissed,
               SettingsManager.shared.autoNFC else { return }
         let s = SettingsManager.shared
         guard s.isConfigured(), s.deviceId != 0 else { return }

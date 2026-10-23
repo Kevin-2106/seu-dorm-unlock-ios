@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var warpClock = WarpClock()   // 引用类型，跃迁粒子的累积相位
 
     @State private var showSettings = false
+    @State private var pressed = false        // 按钮被按住: 缩小 + 触感
+    @State private var tapRing: Double = 1    // 点击瞬间向外扩散的一圈 (0→1)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var isRefreshingCredentials = false
@@ -304,15 +306,27 @@ struct HomeView: View {
             if busy { rippleLayer(t: t) }
             ringLayer(t: t, c: c).offset(ringOffset)
             if burst > 0 { burstRing }
+            tapRingView
             unlockButton(c: c, t: t)
                 .offset(buttonOffset)
         }
+    }
+
+    /// 点击瞬间从按钮边缘向外扩散的一圈亮环
+    private var tapRingView: some View {
+        Circle()
+            .stroke(buttonTint.opacity(0.9 * (1 - tapRing)), lineWidth: 3 * (1 - tapRing) + 1)
+            .frame(width: 176, height: 176)
+            .scaleEffect(1 + 0.55 * tapRing)
+            .opacity(tapRing >= 1 ? 0 : 1)
+            .allowsHitTesting(false)
     }
 
     private func glow(c: Double) -> some View {
         ZStack {
             Circle()
                 .fill(buttonTint.opacity(0.35 + 0.25 * c))
+                .animation(.easeInOut(duration: 0.5), value: ble.state)
                 .frame(width: ((breathe && !reduced) ? 230 : 195) - 40 * c, height: ((breathe && !reduced) ? 230 : 195) - 40 * c)
                 .blur(radius: 26)
                 .opacity(busy ? 0.95 : 0.55)
@@ -444,8 +458,21 @@ struct HomeView: View {
     private func unlockButton(c: Double, t: Double) -> some View {
         buttonByLook(c: c, t: t)
             .frame(width: 180, height: 180)
+            .animation(.easeInOut(duration: 0.5), value: ble.state)   // 状态色渐变而不是瞬间切换
             .scaleEffect(1 - 0.045 * c)   // 蓄力: 微微收缩
+            .scaleEffect(pressed ? 0.88 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: pressed)
             .modifier(ShakeEffect(travel: 12, shakes: shakes))
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !pressed && !unlockDisabled {
+                            pressed = true
+                            if Tuning.shared.hapticsOn { UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.9) }
+                        }
+                    }
+                    .onEnded { _ in pressed = false }
+            )
     }
 
     @ViewBuilder
@@ -472,9 +499,18 @@ struct HomeView: View {
 
     /// 没配置时按钮变成「去登录」，直接打开设置，而不是灰着没反应
     private func tapUnlock() {
+        tapRing = 0
+        DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.55)) { tapRing = 1 } }
         guard s.isConfigured() else { showSettings = true; return }
-        Task { await ble.unlock() }
+        if primaryIsNFC {
+            nfc.startUnlock(auto: false)
+        } else {
+            Task { await ble.unlock() }
+        }
     }
+
+    /// 默认方式是 NFC 且设备可用
+    private var primaryIsNFC: Bool { s.primaryMethod == .nfc && nfc.isAvailable }
 
     @available(iOS 26.0, *)
     private func glassSolidButton(c: Double, t: Double) -> some View {
@@ -532,7 +568,7 @@ struct HomeView: View {
         VStack(spacing: 10) {
             Image(systemName: !s.isConfigured() ? "person.crop.circle" : (ble.state == .success ? "lock.open.fill" : "lock.fill"))
                 .font(.system(size: 44, weight: .semibold))
-            Text(!s.isConfigured() ? "去登录" : (busy ? "开门中" : "开门"))
+            Text(!s.isConfigured() ? "去登录" : (busy ? "开门中" : (primaryIsNFC ? "NFC 开门" : "开门")))
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
         }
         .foregroundStyle(.white)
@@ -588,6 +624,7 @@ struct HomeView: View {
                 Circle()
                     .fill(buttonTint)
                     .frame(width: 10, height: 10)
+                    .animation(.easeInOut(duration: 0.5), value: ble.state)
                 Text(activeFailure?.title ?? ble.statusText)
                     .font(.system(size: 15, design: .rounded))
                     .foregroundStyle(.white)
@@ -660,22 +697,45 @@ struct HomeView: View {
     // MARK: - NFC 持续监听提示条
 
     private var nfcHintRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: nfc.isScanning ? "wave.3.right.circle.fill" : "wave.3.right.circle")
-                .foregroundStyle(nfc.isScanning ? .green : .white.opacity(0.5))
-            if nfc.isScanning {
+        HStack(spacing: 10) {
+            if primaryIsNFC {
+                if s.isConfigured() {
+                    altButton("改用蓝牙开门", icon: "dot.radiowaves.left.and.right") {
+                        Task { await ble.unlock() }
+                    }
+                    .disabled(busy)
+                }
+            } else if !nfc.isAvailable {
+                Image(systemName: "wave.3.right.circle").foregroundStyle(.white.opacity(0.4))
+                Text("NFC 不可用 (设备不支持，或当前安装方式没有 NFC 权限)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+            } else if nfc.isScanning {
+                Image(systemName: "wave.3.right.circle.fill").foregroundStyle(.green)
                 Text("NFC 持续监听中，碰锁即开")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
-            } else if nfc.isAvailable && !s.autoNFC && s.isConfigured() {
-                Button("开始 NFC 扫描") { nfc.startUnlock(auto: false) }
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-            } else {
-                Text(nfc.statusText)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                Button("停止") { nfc.stopAutoScanning() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+            } else if s.isConfigured() {
+                altButton("改用 NFC 开门", icon: "wave.3.right.circle") {
+                    nfc.startUnlock(auto: false)
+                }
+                .disabled(busy)
             }
+        }
+        .frame(minHeight: 30)
+    }
+
+    private func altButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(.white.opacity(0.14), in: Capsule())
+                .foregroundStyle(.white.opacity(0.9))
         }
     }
 }
