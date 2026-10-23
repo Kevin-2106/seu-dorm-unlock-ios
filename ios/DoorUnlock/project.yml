@@ -34,7 +34,7 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: 门锁(自用版)
+        CFBundleDisplayName: 门钥
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         BuildCommit: $(BUILD_COMMIT)
@@ -75,7 +75,7 @@ targets:
     info:
       path: Sources/WidgetInfo.plist
       properties:
-        CFBundleDisplayName: 开门
+        CFBundleDisplayName: 门钥
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
