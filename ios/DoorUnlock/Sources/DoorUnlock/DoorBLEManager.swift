@@ -50,6 +50,14 @@ final class DoorBLEManager: NSObject, ObservableObject {
         statusText = "准备中..."
         let settings = SettingsManager.shared
 
+        // 冷启动(比如从锁屏小组件唤起)时 CBCentralManager 刚创建，状态还是 .unknown，
+        // 要等系统回调 centralManagerDidUpdateState；最多等 2 秒，别一上来就报"蓝牙未开启"。
+        if central.state == .unknown || central.state == .resetting {
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                if central.state != .unknown && central.state != .resetting { break }
+            }
+        }
         guard central.state == .poweredOn else {
             fail("蓝牙未开启")
             return

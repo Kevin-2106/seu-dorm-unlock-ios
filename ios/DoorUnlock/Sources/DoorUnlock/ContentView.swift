@@ -7,18 +7,22 @@ struct ContentView: View {
     @StateObject private var nfc = DoorNFCManager()
     @AppStorage("agreed_disclaimer") private var agreedDisclaimer = false
     @Environment(\.scenePhase) private var scenePhase
+    /// 由小组件/控制唤起时置位：此时要直接走蓝牙开门，不再弹 NFC 系统面板抢屏幕
+    @State private var suppressAutoNFC = false
 
     var body: some View {
         if !agreedDisclaimer {
             disclaimerView
         } else {
             HomeView(ble: ble, nfc: nfc)
+            .onOpenURL { url in handleOpenURL(url) }
             .onAppear { startAutoNFCIfPossible() }
             .onChange(of: scenePhase) { newPhase in
                 switch newPhase {
                 case .active:
                     startAutoNFCIfPossible()
                 case .background:
+                    suppressAutoNFC = false
                     // 真正退到后台才停：NFC 系统弹窗("请贴近")会让 scenePhase 短暂变成
                     // .inactive，不是真的离开 app，那种瞬时状态不处理，否则会跟弹窗自己的
                     // 生命周期打架，把刚开的会话又取消掉。
@@ -50,10 +54,23 @@ struct ContentView: View {
         .padding()
     }
 
+    /// 锁屏小组件 / 锁屏控制点按后经 doorunlock://unlock 唤起：立即开始蓝牙开门。
+    /// 冷启动时 onAppear 可能先于 onOpenURL 已经把 NFC 会话开起来了，所以这里要主动停掉，
+    /// 并置位 suppressAutoNFC 防止 onOpenURL 先到、onAppear 后到时又把它开起来。
+    private func handleOpenURL(_ url: URL) {
+        guard url.scheme == "doorunlock", url.host == "unlock" else { return }
+        suppressAutoNFC = true
+        nfc.stopAutoScanning()
+        let s = SettingsManager.shared
+        guard s.isConfigured(), s.deviceId != 0 else { return }
+        guard ble.state != .scanning, ble.state != .connecting, ble.state != .unlocking else { return }
+        Task { await ble.unlock() }
+    }
+
     /// app 一打开(或从后台回来)就自动进入 NFC 持续监听模式，
     /// 不用再手动点按钮——前提是已经配置好凭证。
     private func startAutoNFCIfPossible() {
-        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning else { return }
+        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning, !suppressAutoNFC else { return }
         let s = SettingsManager.shared
         guard s.isConfigured(), s.deviceId != 0 else { return }
         nfc.startUnlock(auto: true)

@@ -35,6 +35,13 @@ targets:
         NSBluetoothAlwaysUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
         NSBluetoothPeripheralUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
         NFCReaderUsageDescription: 需要读取门锁感应区以发送开锁指令
+        # 小组件/控制点按后通过 doorunlock://unlock 唤起 app 并自动开始开门
+        CFBundleURLTypes:
+          - CFBundleURLName: com.selfuse.doorunlock
+            CFBundleURLSchemes:
+              - doorunlock
+    dependencies:
+      - target: DoorUnlockWidget
     entitlements:
       path: Sources/DoorUnlock.entitlements
       properties:
@@ -46,3 +53,25 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         CODE_SIGN_ENTITLEMENTS: Sources/DoorUnlock.entitlements
+
+  # 锁屏/主屏小组件 + 锁屏控制 (iOS 18+)。
+  # 扩展的最低系统版本(16.0, 锁屏小组件的下限)比 app(15.0)高: 在 iOS 15 的 iPhone 7 上
+  # 扩展不会生效，但不影响 app 本体安装使用。
+  # 不用 App Group (SideStore 免费账号会改写 group id，容易出问题)，小组件是纯静态的。
+  DoorUnlockWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources/Widget
+    info:
+      path: Sources/WidgetInfo.plist
+      properties:
+        CFBundleDisplayName: 开门
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock.widget
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        SKIP_INSTALL: YES

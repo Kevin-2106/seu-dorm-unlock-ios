@@ -54,11 +54,23 @@ jobs:
         run: |
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "DoorUnlock.app" -path "*Release-iphoneos*" | head -1)
           echo "APP_PATH=$APP_PATH"
-          codesign --force --deep --sign - \
+          # 由内向外签: 先签小组件扩展 (不带 NFC entitlement)，最后签主 app 并嵌入 NFC entitlement。
+          # 不用 --deep: 它会把同一份 entitlements 套到嵌套的扩展上。
+          if [ -d "$APP_PATH/PlugIns" ]; then
+            for APPEX in "$APP_PATH"/PlugIns/*.appex; do
+              echo "签名扩展: $APPEX"
+              codesign --force --sign - "$APPEX"
+            done
+          fi
+          codesign --force --sign - \
             --entitlements Sources/DoorUnlock.entitlements \
             "$APP_PATH"
-          echo "===== 校验签名里的 entitlements ====="
+          echo "===== 内含扩展 ====="
+          ls "$APP_PATH/PlugIns" 2>&1 || echo "(没有 PlugIns — 小组件没被嵌进来!)"
+          echo "===== 主 app 签名里的 entitlements ====="
           codesign -d --entitlements :- "$APP_PATH"
+          echo "===== 校验签名完整性 ====="
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH" || echo "(verify 失败，继续打包，TrollStore/SideStore 会重签)"
 
       - name: 打包为 ipa (交给越狱机 TrollStore 侧载)
         working-directory: ios/DoorUnlock
