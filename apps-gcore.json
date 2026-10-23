@@ -1,0 +1,36 @@
+{
+  "name": "门钥",
+  "identifier": "io.github.kevin-2106.seu-dorm-unlock-ios.gcore",
+  "subtitle": "SEU Dorm Unlock for iOS",
+  "description": "门钥的 SideStore 源：添加后可以直接在 SideStore 里安装和更新。",
+  "sourceURL": "https://gcore.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-gcore.json",
+  "apps": [
+    {
+      "name": "门钥",
+      "bundleIdentifier": "io.github.kevin-2106.doorkey",
+      "developerName": "Kevin-2106",
+      "subtitle": "住理生活门锁的非官方 iOS 客户端",
+      "localizedDescription": "用你自己的账号换取你自己门锁的开门凭据，通过蓝牙 / NFC 开门；支持锁屏小组件、锁屏控制和 Action 按钮。与官方 App 及其厂商无关。",
+      "iconURL": "https://raw.githubusercontent.com/Kevin-2106/seu-dorm-unlock-ios/main/docs/icon.png",
+      "tintColor": "3478F6",
+      "versions": [
+        {
+          "version": "1.2.1",
+          "buildVersion": "2610231849",
+          "date": "2026-10-23T18:50:23Z",
+          "downloadURL": "https://gcore.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@c01b8f4784b94709d719e328d2fb0553ee215aa9/DoorUnlock-v1.2.1.ipa",
+          "size": 1453510,
+          "minOSVersion": "15.0",
+          "localizedDescription": "v1.2.1，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.1",
+          "sha256": "43b097f720974d35391156c86607937fc629da1ceb9973524ae4de47b84b61a8"
+        }
+      ],
+      "version": "1.2.1",
+      "versionDate": "2026-10-23T18:50:23Z",
+      "versionDescription": "v1.2.1，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.1",
+      "downloadURL": "https://gcore.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@c01b8f4784b94709d719e328d2fb0553ee215aa9/DoorUnlock-v1.2.1.ipa",
+      "size": 1453510
+    }
+  ],
+  "news": []
+}
