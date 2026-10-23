@@ -10,6 +10,11 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_BITCODE: NO
+    # 版本信息: CI 里用 xcodebuild 命令行覆盖 CURRENT_PROJECT_VERSION(=Actions run 编号)
+    # 和 BUILD_COMMIT(=git 短哈希)，app 里显示出来方便确认装的是哪一版。
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    BUILD_COMMIT: dev
     # 构建期仍然不签名 (xcodebuild 本身在新 SDK 上拒绝 "Ad Hoc" identity:
     # error: Ad Hoc code signing is not allowed with SDK 'iOS 18.2')。
     # entitlements 改成构建完之后单独用 `codesign -s -` 命令行工具手动嵌入，
@@ -30,6 +35,9 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: 门锁(自用版)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BuildCommit: $(BUILD_COMMIT)
         UILaunchScreen: {}
         UIRequiredDeviceCapabilities: [armv7]
         NSBluetoothAlwaysUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
@@ -68,6 +76,8 @@ targets:
       path: Sources/WidgetInfo.plist
       properties:
         CFBundleDisplayName: 开门
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

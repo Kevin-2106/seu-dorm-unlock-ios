@@ -53,6 +53,9 @@ struct HomeView: View {
             statusCard
             Spacer()
             nfcHintRow
+            Text(BuildInfo.summary)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.35))
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 16)

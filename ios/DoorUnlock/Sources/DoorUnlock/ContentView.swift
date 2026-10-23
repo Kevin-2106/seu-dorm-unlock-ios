@@ -16,7 +16,18 @@ struct ContentView: View {
         } else {
             HomeView(ble: ble, nfc: nfc)
             .onOpenURL { url in handleOpenURL(url) }
-            .onAppear { startAutoNFCIfPossible() }
+            .onReceive(NotificationCenter.default.publisher(for: .doorUnlockRequested)) { _ in
+                UnlockRequest.pending = false
+                startExternalUnlock()
+            }
+            .onAppear {
+                // 冷启动: App Intent 的 perform 可能先于界面创建，通知已丢，靠标记补上
+                if UnlockRequest.pending {
+                    UnlockRequest.pending = false
+                    startExternalUnlock()
+                }
+                startAutoNFCIfPossible()
+            }
             .onChange(of: scenePhase) { newPhase in
                 switch newPhase {
                 case .active:
@@ -59,6 +70,11 @@ struct ContentView: View {
     /// 并置位 suppressAutoNFC 防止 onOpenURL 先到、onAppear 后到时又把它开起来。
     private func handleOpenURL(_ url: URL) {
         guard url.scheme == "doorunlock", url.host == "unlock" else { return }
+        startExternalUnlock()
+    }
+
+    /// 外部触发开门的统一入口 (小组件 URL / 快捷指令 App Intent / Action 按钮 / Siri)。
+    private func startExternalUnlock() {
         suppressAutoNFC = true
         nfc.stopAutoScanning()
         let s = SettingsManager.shared

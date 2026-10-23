@@ -33,7 +33,11 @@ jobs:
         working-directory: ios/DoorUnlock
         run: |
           set -o pipefail
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "build号=${{ github.run_number }} commit=$COMMIT"
           xcodebuild -project DoorUnlock.xcodeproj \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            BUILD_COMMIT=$COMMIT \
             -scheme DoorUnlock \
             -configuration Release \
             -sdk iphoneos \
