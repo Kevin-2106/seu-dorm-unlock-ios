@@ -1,4 +1,4 @@
-name: Build iOS (unsigned ipa)
+name: Build iOS (ad-hoc signed ipa)
 
 # 只手动触发：macOS runner 分钟数较贵，不挂 push 自动触发，
 # 需要联调时用 `gh workflow run ios.yml` 或在 Actions 页面点 "Run workflow"。
@@ -29,7 +29,7 @@ jobs:
         working-directory: ios/DoorUnlock
         run: xcodegen generate
 
-      - name: 构建 (真机架构，不签名)
+      - name: 构建 (真机架构，ad-hoc 签名以嵌入 entitlements)
         working-directory: ios/DoorUnlock
         run: |
           set -o pipefail
@@ -38,8 +38,12 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             build 2>&1 | tee build.log
           STATUS=$?
@@ -49,19 +53,25 @@ jobs:
             exit $STATUS
           fi
 
-      - name: 打包为未签名 ipa (交给越狱机 TrollStore 侧载/重签)
+      - name: 验证 entitlements 确实嵌进签名了
         working-directory: ios/DoorUnlock
         run: |
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "DoorUnlock.app" -path "*Release-iphoneos*" | head -1)
           echo "APP_PATH=$APP_PATH"
+          codesign -d --entitlements :- "$APP_PATH" 2>&1 || echo "(codesign 读取失败，但不一定致命，继续打包)"
+
+      - name: 打包为 ipa (交给越狱机 TrollStore 侧载)
+        working-directory: ios/DoorUnlock
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "DoorUnlock.app" -path "*Release-iphoneos*" | head -1)
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -qr DoorUnlock-unsigned.ipa Payload
-          ls -la DoorUnlock-unsigned.ipa
+          zip -qr DoorUnlock-adhoc.ipa Payload
+          ls -la DoorUnlock-adhoc.ipa
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: DoorUnlock-unsigned-ipa
-          path: ios/DoorUnlock/DoorUnlock-unsigned.ipa
+          name: DoorUnlock-adhoc-ipa
+          path: ios/DoorUnlock/DoorUnlock-adhoc.ipa
           if-no-files-found: error

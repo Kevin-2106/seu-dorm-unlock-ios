@@ -10,10 +10,16 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_BITCODE: NO
+    # ad-hoc 签名 (identity "-")：不需要开发者账号/证书，但会把 entitlements 正确
+    # 嵌进代码签名里。TrollStore 靠 CoreTrust 漏洞绕过签名校验，但签名里声明的
+    # entitlements (比如 NFC) 还是会被系统正常解析应用——完全不签名(之前用的
+    # CODE_SIGNING_ALLOWED=NO)则没有签名可言，NFC entitlement 根本没地方写进去。
     DEVELOPMENT_TEAM: ""
-    CODE_SIGN_IDENTITY: ""
-    CODE_SIGNING_REQUIRED: NO
-    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_REQUIRED: YES
+    CODE_SIGNING_ALLOWED: YES
+    PROVISIONING_PROFILE_SPECIFIER: ""
 
 targets:
   DoorUnlock:
