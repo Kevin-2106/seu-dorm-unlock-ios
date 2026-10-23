@@ -15,6 +15,16 @@
       "tintColor": "3478F6",
       "versions": [
         {
+          "version": "1.2.1",
+          "buildVersion": "2610231849",
+          "date": "2026-10-23T18:50:19Z",
+          "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.2.1/DoorUnlock-v1.2.1.ipa",
+          "size": 1453510,
+          "minOSVersion": "15.0",
+          "localizedDescription": "v1.2.1，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.1",
+          "sha256": "43b097f720974d35391156c86607937fc629da1ceb9973524ae4de47b84b61a8"
+        },
+        {
           "version": "1.2.0",
           "buildVersion": "2610231832",
           "date": "2026-10-23T18:33:43Z",
@@ -24,11 +34,11 @@
           "localizedDescription": "v1.2.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.0"
         }
       ],
-      "version": "1.2.0",
-      "versionDate": "2026-10-23T18:33:43Z",
-      "versionDescription": "v1.2.0，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.0",
-      "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.2.0/DoorUnlock-v1.2.0.ipa",
-      "size": 1453508
+      "version": "1.2.1",
+      "versionDate": "2026-10-23T18:50:19Z",
+      "versionDescription": "v1.2.1，详见 https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/tag/v1.2.1",
+      "downloadURL": "https://github.com/Kevin-2106/seu-dorm-unlock-ios/releases/download/v1.2.1/DoorUnlock-v1.2.1.ipa",
+      "size": 1453510
     }
   ],
   "news": []
