@@ -18,6 +18,14 @@ final class DoorBLEManager: NSObject, ObservableObject {
     @Published var log: [String] = []
     /// 最近一次失败的原因和可点的补救动作；状态回到 idle/成功时清空
     @Published var failure: UnlockFailure?
+    /// 开锁命令 (0x78) 一旦发出，门可能已经开了，不能再取消
+    @Published private(set) var committed = false
+    private var cancelRequested = false
+
+    /// 当前是否可以由用户打断 (扫描/连接/传凭证阶段)
+    var canCancel: Bool {
+        (state == .scanning || state == .connecting || state == .unlocking) && !committed
+    }
 
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
@@ -58,6 +66,8 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func runUnlock() async {
+        cancelRequested = false
+        committed = false
         failure = nil
         state = .unlocking
         statusText = "准备中..."
@@ -71,6 +81,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
                 if central.state != .unknown && central.state != .resetting { break }
             }
         }
+        if cancelRequested { finishCancel(); return }
         guard central.state == .poweredOn else {
             fail("蓝牙未开启")
             return
@@ -109,6 +120,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
         statusText = "连接门锁..."
         state = .connecting
         var connected = await connectAndDiscover(device)
+        if cancelRequested { finishCancel(); return }
 
         // 缓存直连失败 (设备不在附近了/换了台锁)：退回一次正常扫描再试，而不是直接报错
         if !connected && usedCache {
@@ -125,6 +137,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
             statusText = "连接门锁..."
             state = .connecting
             connected = await connectAndDiscover(device)
+            if cancelRequested { finishCancel(); return }
         }
 
         guard connected else {
@@ -150,10 +163,20 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func fail(_ f: UnlockFailure) {
+        // 用户打断导致的"超时/未发现/连接失败"不算失败
+        if cancelRequested { finishCancel(); return }
         appendLog("失败: \(f.title)" + (f.code.map { " (resultCode=\($0))" } ?? ""))
         failure = f
         state = .failed
         statusText = f.title
+        disconnect()
+    }
+
+    private func finishCancel() {
+        appendLog("用户取消开门")
+        failure = nil
+        state = .idle
+        statusText = "已取消"
         disconnect()
     }
 
@@ -190,6 +213,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
 
         // Step 3: 开锁命令 (0x78)
         statusText = "开锁中..."
+        committed = true
         guard let unlockResp = await sendPacketAndWait(DoorCrypto.buildUnlockCommand(deviceId: settings.deviceId)) else {
             throw UnlockError.message("0x78 命令超时")
         }
@@ -311,6 +335,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
             }
         }
 
+        committed = true
         guard let unl2 = await sendPacketAndWait(DoorCrypto.buildUnlockCommand(deviceId: settings.deviceId)) else {
             throw UnlockError.message("重试 0x78 超时")
         }
@@ -344,6 +369,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func connectAndDiscover(_ p: CBPeripheral) async -> Bool {
+        if cancelRequested { return false }
         peripheral = p
         p.delegate = self
 
@@ -392,6 +418,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func sendPacketAndWait(_ packet: [UInt8]) async -> [UInt8]? {
+        if cancelRequested { return nil }
         guard let p = peripheral, let wc = writeChar else { return nil }
         return await withCheckedContinuation { cont in
             self.responseContinuation = cont
@@ -414,10 +441,18 @@ final class DoorBLEManager: NSObject, ObservableObject {
         readChar = nil
     }
 
+    /// 用户打断开门: 停止扫描、唤醒所有正在等待的步骤让它们立刻返回，再断开连接。
+    /// 开锁命令发出之后 (committed) 不再响应，避免"显示已取消但门其实开了"。
     func cancel() {
+        guard canCancel else { return }
+        cancelRequested = true
+        central.stopScan()
+        if let c = scanContinuation { scanContinuation = nil; c.resume(returning: nil) }
+        if let c = connectContinuation { connectContinuation = nil; c.resume(returning: false) }
+        if let c = servicesContinuation { servicesContinuation = nil; c.resume(returning: false) }
+        if let c = notifyContinuation { notifyContinuation = nil; c.resume(returning: false) }
+        if let c = responseContinuation { responseContinuation = nil; c.resume(returning: nil) }
         disconnect()
-        state = .idle
-        statusText = "就绪"
     }
 }
 

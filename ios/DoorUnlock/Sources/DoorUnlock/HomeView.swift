@@ -495,12 +495,17 @@ struct HomeView: View {
         }
     }
 
-    private var unlockDisabled: Bool { busy }
+    private var unlockDisabled: Bool { busy && !ble.canCancel }
 
     /// 没配置时按钮变成「去登录」，直接打开设置，而不是灰着没反应
     private func tapUnlock() {
         tapRing = 0
         DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.55)) { tapRing = 1 } }
+        // 开门过程中再点一下 = 打断
+        if busy {
+            if ble.canCancel { ble.cancel() }
+            return
+        }
         guard s.isConfigured() else { showSettings = true; return }
         if primaryIsNFC {
             nfc.startUnlock(auto: false)
@@ -566,9 +571,9 @@ struct HomeView: View {
 
     private var labelContent: some View {
         VStack(spacing: 10) {
-            Image(systemName: !s.isConfigured() ? "person.crop.circle" : (ble.state == .success ? "lock.open.fill" : "lock.fill"))
+            Image(systemName: !s.isConfigured() ? "person.crop.circle" : (busy && ble.canCancel ? "xmark" : (ble.state == .success ? "lock.open.fill" : "lock.fill")))
                 .font(.system(size: 44, weight: .semibold))
-            Text(!s.isConfigured() ? "去登录" : (busy ? "开门中" : (primaryIsNFC ? "NFC 开门" : "开门")))
+            Text(!s.isConfigured() ? "去登录" : (busy ? (ble.canCancel ? "点按取消" : "开锁中") : (primaryIsNFC ? "NFC 开门" : "开门")))
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
         }
         .foregroundStyle(.white)
