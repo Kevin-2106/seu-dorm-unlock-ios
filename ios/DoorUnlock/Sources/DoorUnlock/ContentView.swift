@@ -1,25 +1,34 @@
 import SwiftUI
 
+/// app 根视图：免责声明门禁 + 持有 BLE/NFC 状态对象，往下传给 HomeView/SettingsView。
+/// 页面内容本身拆到 HomeView (首页，开门按钮) 和 SettingsView (账号/参数/日志)。
 struct ContentView: View {
     @StateObject private var ble = DoorBLEManager()
     @StateObject private var nfc = DoorNFCManager()
     @AppStorage("agreed_disclaimer") private var agreedDisclaimer = false
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var deviceIdText = ""
-    @State private var projectIdText = ""
-    @State private var credentialIdText = ""
-    @State private var chainKeyText = ""
-    @State private var phone = ""
-    @State private var password = ""
-    @State private var fetchStatus = ""
-    @State private var isFetching = false
-
     var body: some View {
         if !agreedDisclaimer {
             disclaimerView
         } else {
-            mainView
+            NavigationView {
+                HomeView(ble: ble, nfc: nfc)
+            }
+            .onAppear { startAutoNFCIfPossible() }
+            .onChange(of: scenePhase) { newPhase in
+                switch newPhase {
+                case .active:
+                    startAutoNFCIfPossible()
+                case .background:
+                    // 真正退到后台才停：NFC 系统弹窗("请贴近")会让 scenePhase 短暂变成
+                    // .inactive，不是真的离开 app，那种瞬时状态不处理，否则会跟弹窗自己的
+                    // 生命周期打架，把刚开的会话又取消掉。
+                    nfc.stopAutoScanning()
+                default:
+                    break
+                }
+            }
         }
     }
 
@@ -43,107 +52,6 @@ struct ContentView: View {
         .padding()
     }
 
-    private var mainView: some View {
-        NavigationView {
-            Form {
-                Section("账号登录 (用于获取/刷新凭证)") {
-                    TextField("手机号", text: $phone).keyboardType(.phonePad)
-                    SecureField("密码", text: $password)
-                    Button(isFetching ? "拉取中..." : "登录并拉取门锁凭证") {
-                        Task { await loginAndFetch() }
-                    }
-                    .disabled(isFetching || phone.isEmpty || password.isEmpty)
-                    if !fetchStatus.isEmpty {
-                        Text(fetchStatus).font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("门锁参数 (登录拉取后自动填入，可手动修改)") {
-                    TextField("设备ID (deviceId)", text: $deviceIdText).keyboardType(.numberPad)
-                    TextField("项目ID (projectId)", text: $projectIdText).keyboardType(.numberPad)
-                    TextField("凭证ID (credentialId)", text: $credentialIdText).keyboardType(.numberPad)
-                    TextField("chainKey (64位hex)", text: $chainKeyText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("保存参数") { saveSettings() }
-                }
-
-                Section("开门") {
-                    HStack {
-                        Circle()
-                            .fill(stateColor)
-                            .frame(width: 10, height: 10)
-                        Text(ble.statusText)
-                    }
-                    Button(ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking ? "开门中..." : "开门") {
-                        Task { await ble.unlock() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking)
-                }
-
-                Section("碰锁开门 (NFC)") {
-                    HStack {
-                        Circle()
-                            .fill(nfc.isScanning ? Color.green : Color.gray)
-                            .frame(width: 10, height: 10)
-                        Text(nfc.statusText).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if nfc.isScanning {
-                        Text("持续监听中，app 开着就可以随时碰锁").font(.caption).foregroundStyle(.secondary)
-                        Button("停止扫描") { nfc.stopAutoScanning() }
-                            .buttonStyle(.bordered)
-                    } else {
-                        Button("开始碰锁开门") { nfc.startUnlock() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(!nfc.isAvailable)
-                    }
-                    if !nfc.isAvailable {
-                        Text("此设备不支持 NFC 读卡").font(.caption).foregroundStyle(.red)
-                    }
-                }
-
-                Section("NFC 通讯日志") {
-                    ForEach(Array(nfc.log.suffix(80).enumerated()), id: \.offset) { _, line in
-                        Text(line).font(.system(size: 10, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Section("网络日志 (调试用，排查登录/拉凭证问题)") {
-                    ForEach(Array(ServerApi.debugLog.suffix(100).enumerated()), id: \.offset) { _, line in
-                        Text(line).font(.system(size: 10, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Section("蓝牙通讯日志") {
-                    ForEach(ble.log.suffix(50), id: \.self) { line in
-                        Text(line).font(.system(size: 11, design: .monospaced))
-                    }
-                }
-            }
-            .navigationTitle("门锁 (自用版)")
-            .onAppear {
-                loadSettings()
-                startAutoNFCIfPossible()
-            }
-            .onChange(of: scenePhase) { newPhase in
-                switch newPhase {
-                case .active:
-                    startAutoNFCIfPossible()
-                case .background:
-                    // 真正退到后台才停：NFC 系统弹窗("请贴近")会让 scenePhase 短暂变成
-                    // .inactive，不是真的离开 app，那种瞬时状态不处理，否则会跟弹窗自己的
-                    // 生命周期打架，把刚开的会话又取消掉。
-                    nfc.stopAutoScanning()
-                default:
-                    break
-                }
-            }
-        }
-    }
-
     /// app 一打开(或从后台回来)就自动进入 NFC 持续监听模式，
     /// 不用再手动点按钮——前提是已经配置好凭证。
     private func startAutoNFCIfPossible() {
@@ -151,69 +59,6 @@ struct ContentView: View {
         let s = SettingsManager.shared
         guard s.isConfigured(), s.deviceId != 0 else { return }
         nfc.startUnlock(auto: true)
-    }
-
-    private var stateColor: Color {
-        switch ble.state {
-        case .success: return .green
-        case .failed: return .red
-        case .idle: return .gray
-        default: return .orange
-        }
-    }
-
-    private func loadSettings() {
-        let s = SettingsManager.shared
-        deviceIdText = s.deviceId == 0 ? "" : String(s.deviceId)
-        projectIdText = s.projectId == 0 ? "" : String(s.projectId)
-        credentialIdText = s.credentialId == 0 ? "" : String(s.credentialId)
-        chainKeyText = s.chainKey
-        phone = s.loginPhone
-    }
-
-    private func saveSettings() {
-        let s = SettingsManager.shared
-        s.deviceId = Int32(deviceIdText) ?? 0
-        s.projectId = Int32(projectIdText) ?? 0
-        s.credentialId = Int32(credentialIdText) ?? 0
-        s.chainKey = chainKeyText
-    }
-
-    private func loginAndFetch() async {
-        isFetching = true
-        fetchStatus = "登录中..."
-        let s = SettingsManager.shared
-        s.loginPhone = phone
-        s.loginPassword = password
-
-        let result = await ServerApi.login(phone: phone, password: password)
-        guard result.success else {
-            fetchStatus = "登录失败: \(result.error)"
-            isFetching = false
-            return
-        }
-
-        fetchStatus = "登录成功，拉取门锁信息..."
-        do {
-            let addr = try await ServerApi.fetchAddress()
-            guard addr.deviceId != 0 else {
-                fetchStatus = "未找到绑定的门锁"
-                isFetching = false
-                return
-            }
-            s.deviceId = addr.deviceId
-            s.deviceMac = addr.mac
-            s.credentialId = addr.credentialId
-            s.chainKey = addr.chainKey
-            // ★ projectId 不是服务器直接给的字段，是 Android 版"自动获取参数"按钮的隐藏逻辑：
-            //   projectId 其实就是登录时拿到的 serverAppId (这里=21048)，不是用户瞎填的。
-            s.projectId = s.serverAppId.isEmpty ? s.projectId : (Int32(s.serverAppId) ?? s.projectId)
-            loadSettings()
-            fetchStatus = "✓ 已获取: \(addr.buildingName)\(addr.floorName)\(addr.roomName) (device=\(addr.deviceId), projectId=\(s.projectId))"
-        } catch {
-            fetchStatus = "拉取失败: \(error.localizedDescription)"
-        }
-        isFetching = false
     }
 }
 

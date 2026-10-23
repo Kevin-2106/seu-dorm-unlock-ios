@@ -14,6 +14,7 @@ final class SettingsManager {
         static let credentialId = "credential_id"
         static let chainKey = "chain_key"
         static let deviceMac = "device_mac"
+        static let cachedPeripheralID = "cached_peripheral_id"
         static let agreedDisclaimer = "agreed_disclaimer"
         static let showLogs = "show_logs"
         static let loginPhone = "login_phone"
@@ -54,6 +55,14 @@ final class SettingsManager {
     var deviceMac: String {
         get { defaults.string(forKey: Key.deviceMac) ?? "" }
         set { defaults.set(newValue, forKey: Key.deviceMac) }
+    }
+
+    /// 上次成功连接的 CBPeripheral.identifier（iOS 给每台设备+每个蓝牙外设配对关系分配的
+    /// UUID，不是真实 MAC，且每台 iOS 设备看到的值不同，所以不放进可跨设备分享的配置码）。
+    /// 下次开门先用这个直连，跳过几秒的广播扫描；拿不到再退回扫描。
+    var cachedPeripheralID: String {
+        get { defaults.string(forKey: Key.cachedPeripheralID) ?? "" }
+        set { defaults.set(newValue, forKey: Key.cachedPeripheralID) }
     }
 
     /// BLE 扫描名称

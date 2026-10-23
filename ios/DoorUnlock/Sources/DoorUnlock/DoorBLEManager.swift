@@ -3,8 +3,11 @@ import CoreBluetooth
 
 /// BLE 开门管理器 (移植自 Android 版 BleUnlockManager.kt)
 ///
-/// MVP 范围: 每次开门都重新扫描 (不像 Android 版缓存 MAC 直连 —— CoreBluetooth 不暴露真实 MAC，
-/// 直连需缓存 CBPeripheral.identifier，留作下一轮迭代的优化项)。
+/// 直连优化: CoreBluetooth 不暴露真实 MAC，但 `CBPeripheral.identifier` 是同一台 iOS 设备上
+/// 对同一个外设稳定不变的 UUID。第一次成功连接后缓存这个 UUID，下次开门先用
+/// `retrievePeripherals(withIdentifiers:)` 直连，跳过几秒的广播扫描；拿不到(比如换了台
+/// iOS 设备、或系统缓存被清)再退回正常扫描。这个 UUID 是设备本地的，不放进可跨设备
+/// 分享的配置码 (ConfigCode.swift)。
 @MainActor
 final class DoorBLEManager: NSObject, ObservableObject {
 
@@ -54,19 +57,60 @@ final class DoorBLEManager: NSObject, ObservableObject {
 
         appendLog("当前参数: deviceId=\(settings.deviceId), projectId=\(settings.projectId), credId=\(settings.credentialId), chainKey长度=\(settings.chainKey.count)")
 
-        statusText = "扫描门锁..."
         state = .scanning
-        guard let p = await scanDevice(targetName: settings.bleName) else {
+        var p: CBPeripheral?
+        var usedCache = false
+
+        // 先试缓存的 peripheral UUID 直连，不用等几秒广播扫描
+        if !settings.cachedPeripheralID.isEmpty, let uuid = UUID(uuidString: settings.cachedPeripheralID) {
+            statusText = "直连门锁..."
+            let known = central.retrievePeripherals(withIdentifiers: [uuid])
+            if let cached = known.first {
+                appendLog("命中缓存 UUID，直连: \(uuid.uuidString)")
+                p = cached
+                usedCache = true
+            } else {
+                appendLog("缓存 UUID 失效 (系统已不认识这个外设)，回退扫描")
+            }
+        }
+
+        if p == nil {
+            statusText = "扫描门锁..."
+            p = await scanDevice(targetName: settings.bleName)
+            usedCache = false
+        }
+
+        guard var device = p else {
             fail("未发现门锁设备 (XN-\(settings.deviceId))")
             return
         }
 
         statusText = "连接门锁..."
         state = .connecting
-        guard await connectAndDiscover(p) else {
+        var connected = await connectAndDiscover(device)
+
+        // 缓存直连失败 (设备不在附近了/换了台锁)：退回一次正常扫描再试，而不是直接报错
+        if !connected && usedCache {
+            appendLog("缓存直连失败，回退扫描重试...")
+            central.cancelPeripheralConnection(device) // 清掉这次失败的连接尝试，避免悬着
+            settings.cachedPeripheralID = ""
+            statusText = "扫描门锁..."
+            state = .scanning
+            guard let fresh = await scanDevice(targetName: settings.bleName) else {
+                fail("未发现门锁设备 (XN-\(settings.deviceId))")
+                return
+            }
+            device = fresh
+            statusText = "连接门锁..."
+            state = .connecting
+            connected = await connectAndDiscover(device)
+        }
+
+        guard connected else {
             fail("连接或服务发现失败")
             return
         }
+        settings.cachedPeripheralID = device.identifier.uuidString
 
         appendLog("已连接门锁，开始开门流程")
 
