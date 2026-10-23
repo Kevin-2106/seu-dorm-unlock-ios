@@ -7,7 +7,6 @@ struct SettingsView: View {
     @ObservedObject var ble: DoorBLEManager
     @ObservedObject var nfc: DoorNFCManager
     @ObservedObject private var background = BackgroundImageStore.shared
-    @AppStorage("button_fill_transparent") private var transparentFill = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var deviceIdText: String
@@ -77,7 +76,7 @@ struct SettingsView: View {
                 }
 
                 Section("首页外观") {
-                    Toggle("开锁按钮透明填充", isOn: $transparentFill)
+                    NavigationLink("视觉与震动调节") { TuningView() }
                     if #available(iOS 16.0, *) {
                         BackgroundPickerRow()
                     } else {
