@@ -31,7 +31,14 @@ targets:
         NSBluetoothAlwaysUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
         NSBluetoothPeripheralUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
         NFCReaderUsageDescription: 需要读取门锁感应区以发送开锁指令
+    entitlements:
+      path: Sources/DoorUnlock.entitlements
+      properties:
+        com.apple.developer.nfc.readersession.formats:
+          - TAG
+          - NDEF
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        CODE_SIGN_ENTITLEMENTS: Sources/DoorUnlock.entitlements

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var ble = DoorBLEManager()
+    @StateObject private var nfc = DoorNFCManager()
     @AppStorage("agreed_disclaimer") private var agreedDisclaimer = false
 
     @State private var deviceIdText = ""
@@ -78,6 +79,23 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking)
+                }
+
+                Section("碰锁开门 (NFC)") {
+                    Text(nfc.statusText).font(.footnote).foregroundStyle(.secondary)
+                    Button("碰锁开门") { nfc.startUnlock() }
+                        .buttonStyle(.bordered)
+                        .disabled(!nfc.isAvailable)
+                    if !nfc.isAvailable {
+                        Text("此设备不支持 NFC 读卡").font(.caption).foregroundStyle(.red)
+                    }
+                }
+
+                Section("NFC 通讯日志") {
+                    ForEach(Array(nfc.log.suffix(80).enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.system(size: 10, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
                 }
 
                 Section("网络日志 (调试用，排查登录/拉凭证问题)") {
