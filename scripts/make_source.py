@@ -38,12 +38,15 @@ if os.path.exists(a.out):
 
 apps = doc.get("apps") or [{}]
 app = apps[0]
-versions = [v for v in app.get("versions", []) if v.get("version") != version]
+NEW_BUNDLE_ID = "io.github.kevin-2106.doorkey"
+# 包名换过 (旧版是 com.selfuse.doorunlock)：旧包名的历史版本不能留在源里，否则会装出另一个 App
+old = app.get("versions", []) if app.get("bundleIdentifier") == NEW_BUNDLE_ID else []
+versions = [v for v in old if v.get("version") != version]
 versions.insert(0, entry)
 
 app.update({
     "name": "门钥",
-    "bundleIdentifier": "com.selfuse.doorunlock",
+    "bundleIdentifier": NEW_BUNDLE_ID,
     "developerName": owner,
     "subtitle": "住理生活门锁的非官方 iOS 客户端",
     "localizedDescription": "用你自己的账号换取你自己门锁的开门凭据，通过蓝牙 / NFC 开门；支持锁屏小组件、锁屏控制和 Action 按钮。与官方 App 及其厂商无关。",

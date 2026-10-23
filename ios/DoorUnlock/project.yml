@@ -1,6 +1,6 @@
 name: DoorUnlock
 options:
-  bundleIdPrefix: com.selfuse.doorunlock
+  bundleIdPrefix: io.github.kevin-2106.doorkey
   deploymentTarget:
     iOS: "15.0"
 
@@ -45,7 +45,7 @@ targets:
         NFCReaderUsageDescription: 需要读取门锁感应区以发送开锁指令
         # 小组件/控制点按后通过 doorunlock://unlock 唤起 app 并自动开始开门
         CFBundleURLTypes:
-          - CFBundleURLName: com.selfuse.doorunlock
+          - CFBundleURLName: io.github.kevin-2106.doorkey
             CFBundleURLSchemes:
               - doorunlock
     dependencies:
@@ -58,7 +58,7 @@ targets:
           - NDEF
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin-2106.doorkey
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         CODE_SIGN_ENTITLEMENTS: Sources/DoorUnlock.entitlements
@@ -83,6 +83,6 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock.widget
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin-2106.doorkey.widget
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         SKIP_INSTALL: YES

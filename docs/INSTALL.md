@@ -69,7 +69,7 @@ TrollStore 装的 App 签名永久有效，不用刷新。
 
 ## 小组件扩展没装上
 
-「门钥」由两部分组成：主 App（`com.selfuse.doorunlock`）和小组件扩展（`com.selfuse.doorunlock.widget`）。每个都要占一个 App ID。
+「门钥」由两部分组成：主 App（`io.github.kevin-2106.doorkey`）和小组件扩展（`io.github.kevin-2106.doorkey.widget`）。每个都要占一个 App ID。
 
 **症状**：安装时 SideStore 提示 App ID 数量已满，让你选择"移除 app extension"；选了之后，锁屏小组件、锁屏控制就都没有了。
 
@@ -89,6 +89,16 @@ TrollStore 装的 App 签名永久有效，不用刷新。
 
 - **首页最底部**一行淡淡的字，形如 `v1.1.0 (build 2610251530 · a1b2c3d)`：版本、构建号（构建时的 UTC 时间 `YYMMDDHHmm`）、commit 短哈希。和 Releases 页对一下就知道装的是不是最新。
 - **设置 →「关于」**：同样的版本信息，再加"小组件扩展：已安装 / 未安装"。
+
+---
+
+## 从 v1.1.0 及更早版本升级（包名变更）
+
+v1.2.0 起包名由 `com.selfuse.doorunlock` 改为 `io.github.kevin-2106.doorkey`。系统会把它当成**全新的 App**：
+
+- 旧的「门钥」不会被覆盖，需要自己删除；旧版的凭据、设置、Keychain 里的密码**不会带过来**，新版里重新登录一次即可；
+- 锁屏小组件、控制要重新添加，快捷指令里的「开门」动作要重新选；
+- 免费 Apple ID 会多占 2 个 App ID 名额（主 App + 小组件），旧的要等它们 7 天后自然过期才释放。
 
 ---
 
