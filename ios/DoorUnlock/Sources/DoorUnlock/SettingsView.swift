@@ -24,6 +24,9 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    NavigationLink { UnlockHistoryView() } label: {
+                        row("开锁记录", icon: "clock.arrow.circlepath", detail: "")
+                    }
                     NavigationLink { DiagnosticsView(ble: ble, nfc: nfc) } label: {
                         row("诊断", icon: "stethoscope", detail: "")
                     }

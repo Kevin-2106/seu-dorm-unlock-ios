@@ -53,6 +53,7 @@ struct HomeView: View {
             deviceSummary
             unlockCluster
             statusCard
+            OnboardingCard()
             Spacer()
             nfcHintRow
             Text(BuildInfo.summary)
@@ -255,7 +256,7 @@ struct HomeView: View {
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
             if !s.isConfigured() {
-                Text("请先去设置页登录拉取凭证").font(.caption).foregroundStyle(.orange)
+                Text("点中间的按钮，登录并拉取门锁凭据").font(.caption).foregroundStyle(.orange)
             }
         }
     }
@@ -453,11 +454,17 @@ struct HomeView: View {
         }
     }
 
-    private var unlockDisabled: Bool { busy || !s.isConfigured() }
+    private var unlockDisabled: Bool { busy }
+
+    /// 没配置时按钮变成「去登录」，直接打开设置，而不是灰着没反应
+    private func tapUnlock() {
+        guard s.isConfigured() else { showSettings = true; return }
+        Task { await ble.unlock() }
+    }
 
     @available(iOS 26.0, *)
     private func glassSolidButton(c: Double, t: Double) -> some View {
-        Button { Task { await ble.unlock() } } label: { labelView(c: c, t: t) }
+        Button { tapUnlock() } label: { labelView(c: c, t: t) }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.circle)
             .tint(buttonTint)
@@ -468,7 +475,7 @@ struct HomeView: View {
     /// 文档提示 clear 玻璃下面要垫一层半透明暗色保证内容可读 —— clearBacking 可调。
     @available(iOS 26.0, *)
     private func glassClearButton(c: Double, t: Double) -> some View {
-        Button { Task { await ble.unlock() } } label: { labelView(c: c, t: t) }
+        Button { tapUnlock() } label: { labelView(c: c, t: t) }
             .buttonStyle(.glass(.clear.tint(buttonTint.opacity(tuning.glassTint)).interactive()))
             .buttonBorderShape(.circle)
             .disabled(unlockDisabled)
@@ -476,7 +483,7 @@ struct HomeView: View {
     }
 
     private func customButton(look: ButtonLook, c: Double, t: Double) -> some View {
-        Button { Task { await ble.unlock() } } label: {
+        Button { tapUnlock() } label: {
             labelView(c: c, t: t)
                 .background(buttonFill(look: look))
                 .overlay(Circle().stroke(Color.white.opacity(look == .clear ? 0.3 : 0.12), lineWidth: 1))
@@ -509,9 +516,9 @@ struct HomeView: View {
 
     private var labelContent: some View {
         VStack(spacing: 10) {
-            Image(systemName: ble.state == .success ? "lock.open.fill" : "lock.fill")
+            Image(systemName: !s.isConfigured() ? "person.crop.circle" : (ble.state == .success ? "lock.open.fill" : "lock.fill"))
                 .font(.system(size: 44, weight: .semibold))
-            Text(busy ? "开门中" : "开门")
+            Text(!s.isConfigured() ? "去登录" : (busy ? "开门中" : "开门"))
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
         }
         .foregroundStyle(.white)
@@ -642,9 +649,19 @@ struct HomeView: View {
         HStack(spacing: 8) {
             Image(systemName: nfc.isScanning ? "wave.3.right.circle.fill" : "wave.3.right.circle")
                 .foregroundStyle(nfc.isScanning ? .green : .white.opacity(0.5))
-            Text(nfc.isScanning ? "NFC 持续监听中，碰锁即开" : nfc.statusText)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+            if nfc.isScanning {
+                Text("NFC 持续监听中，碰锁即开")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            } else if nfc.isAvailable && !s.autoNFC && s.isConfigured() {
+                Button("开始 NFC 扫描") { nfc.startUnlock(auto: false) }
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.85))
+            } else {
+                Text(nfc.statusText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
         }
     }
 }

@@ -86,7 +86,8 @@ struct ContentView: View {
     /// app 一打开(或从后台回来)就自动进入 NFC 持续监听模式，
     /// 不用再手动点按钮——前提是已经配置好凭证。
     private func startAutoNFCIfPossible() {
-        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning, !suppressAutoNFC else { return }
+        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning, !suppressAutoNFC,
+              SettingsManager.shared.autoNFC else { return }
         let s = SettingsManager.shared
         guard s.isConfigured(), s.deviceId != 0 else { return }
         nfc.startUnlock(auto: true)

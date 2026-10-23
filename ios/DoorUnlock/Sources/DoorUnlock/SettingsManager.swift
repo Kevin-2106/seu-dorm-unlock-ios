@@ -23,6 +23,7 @@ final class SettingsManager: ObservableObject {
         static let cachedPeripheralID = "cached_peripheral_id"
         static let agreedDisclaimer = "agreed_disclaimer"
         static let showLogs = "show_logs"
+        static let autoNFC = "auto_nfc"
         static let loginPhone = "login_phone"
         static let platformToken = "platform_token"
         static let projectServerUrl = "project_server_url"
@@ -125,6 +126,12 @@ final class SettingsManager: ObservableObject {
     var agreedDisclaimer: Bool {
         get { defaults.bool(forKey: Key.agreedDisclaimer) }
         set { defaults.set(newValue, forKey: Key.agreedDisclaimer) }
+    }
+
+    /// 打开 App / 回到前台时自动进入 NFC 持续监听 (默认开)。只用蓝牙的人可以关掉，免得每次弹系统 NFC 面板。
+    var autoNFC: Bool {
+        get { defaults.object(forKey: Key.autoNFC) as? Bool ?? true }
+        set { objectWillChange.send(); defaults.set(newValue, forKey: Key.autoNFC) }
     }
 
     var showLogs: Bool {

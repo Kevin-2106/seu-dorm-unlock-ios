@@ -48,6 +48,16 @@ final class DoorBLEManager: NSObject, ObservableObject {
 
     // ─── 开门主流程 ───
     func unlock() async {
+        let started = Date()
+        await runUnlock()
+        if state == .success || state == .failed {
+            UnlockLog.shared.add(method: .ble, success: state == .success,
+                                 detail: state == .success ? statusText : (failure?.title ?? statusText),
+                                 duration: Date().timeIntervalSince(started))
+        }
+    }
+
+    private func runUnlock() async {
         failure = nil
         state = .unlocking
         statusText = "准备中..."

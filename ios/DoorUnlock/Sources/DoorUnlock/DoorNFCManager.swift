@@ -131,6 +131,11 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
         appendLog("标签 UID: \(identifierHex(of: tag))")
         failure = nil
+        let started = Date()
+        func record(_ success: Bool, _ detail: String) {
+            UnlockLog.shared.add(method: .nfc, success: success, detail: detail,
+                                 duration: Date().timeIntervalSince(started))
+        }
 
         let settings = SettingsManager.shared
         let cmd = DoorCrypto.buildNfcOpenCommand(deviceId: settings.deviceId, projectId: settings.projectId, chainKeyHex: settings.chainKey)
@@ -161,6 +166,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
             session.invalidate(errorMessage: "门锁无响应，请重试")
             statusText = "门锁无响应"
             failure = .plain("门锁无响应", hint: "手机贴紧感应区，保持不动再试一次。")
+            record(false, "门锁无响应")
             return
         }
 
@@ -176,6 +182,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
             } else {
                 failure = UnlockFailure.plain("开门失败: \(msg)")
             }
+            record(false, failure?.title ?? msg)
             return
         }
 
@@ -188,6 +195,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
         appendLog("✓ \(result.message) (seq=\(result.seq.map(String.init) ?? "nil"))")
         statusText = result.doorAlreadyOpen ? "门已打开 🔓" : "开门成功 🔓"
+        record(true, statusText)
         session.alertMessage = statusText
         session.invalidate()
     }
