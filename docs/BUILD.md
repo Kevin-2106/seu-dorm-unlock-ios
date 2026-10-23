@@ -100,6 +100,12 @@ https://raw.githubusercontent.com/Kevin-2106/seu-dorm-unlock-ios/source/apps.jso
 
 ---
 
+## 国内加速源
+
+同样在发布时，CI 把 ipa 提交到 `cdn` 分支，并生成 `apps-gcore.json` / `apps-cf.json` / `apps-fastly.json` 三份源（分别指向 `gcore.jsdelivr.net` / `testingcf.jsdelivr.net` / `fastly.jsdelivr.net`）。ipa 的下载地址固定到 commit 哈希，源文件按分支访问，发布后主动 purge jsDelivr 缓存。`cdn` 分支会随版本数线性增长（每版约 1.4MB），不做历史改写。
+
+---
+
 ## 目录结构
 
 ```

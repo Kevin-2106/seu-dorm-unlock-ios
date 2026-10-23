@@ -74,6 +74,16 @@ iOS 18 及以上还可以把锁屏左下 / 右下角的按钮换成「门钥 · 
 https://raw.githubusercontent.com/Kevin-2106/seu-dorm-unlock-ios/source/apps.json
 ```
 
+**国内网络访问 GitHub 慢或打不开**：用 jsDelivr 加速源（ipa 也走加速），三个域名任选一个能连上的：
+
+| 源 | 地址 |
+|---|---|
+| gcore | `https://gcore.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-gcore.json` |
+| cf | `https://testingcf.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-cf.json` |
+| fastly | `https://fastly.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-fastly.json` |
+
+> 加速源经过第三方 CDN。这个 App 持有你的门锁凭据，**建议安装前核对 SHA-256**（写在每个 Release 的说明里，加速源里也带了校验值），详见 [docs/INSTALL.md](docs/INSTALL.md#国内加速源)。
+
 > 想要 NFC，只能用 TrollStore（或越狱、付费开发者账号）。原因见 [docs/NFC-AND-SIDELOADING.md](docs/NFC-AND-SIDELOADING.md)。只用蓝牙的话，两种都可以。
 
 **第二步：从 [Releases](../../releases) 下载 `.ipa`，用上面的工具安装**

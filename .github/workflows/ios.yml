@@ -107,6 +107,9 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             cp DoorUnlock-adhoc.ipa "DoorUnlock-${GITHUB_REF_NAME}.ipa"
           fi
+          SHA=$(shasum -a 256 DoorUnlock-adhoc.ipa | cut -d' ' -f1)
+          echo "IPA_SHA256=$SHA" >> "$GITHUB_ENV"
+          echo "sha256: $SHA"
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -127,6 +130,7 @@ jobs:
 
             - NFC 开门需要 TrollStore / 越狱 / 付费开发者账号；SideStore + 免费 Apple ID 只能用蓝牙。
             - 构建号 ${{ env.BUILD_NUMBER }}，commit `${{ github.sha }}`。
+            - ipa 的 SHA-256：`${{ env.IPA_SHA256 }}`（从镜像下载后可以用它核对）。
 
       # 更新 SideStore 源: source 分支上的 apps.json。用户在 SideStore 里添加
       #   https://raw.githubusercontent.com/<owner>/<repo>/source/apps.json
@@ -148,9 +152,52 @@ jobs:
             git init -q -b source
             git remote add origin "$URL"
           fi
-          python3 "$SCRIPT" --repo "$REPO" --tag "$TAG" --build "$BUILD_NUMBER" --size "$SIZE" --out apps.json
+          python3 "$SCRIPT" --repo "$REPO" --tag "$TAG" --build "$BUILD_NUMBER" --size "$SIZE" --sha256 "$IPA_SHA256" --out apps.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps.json
           git commit -qm "source: ${TAG} (build ${BUILD_NUMBER})"
           git push -q origin source
+
+      # 国内加速镜像: jsDelivr 能直接代理 GitHub 仓库里的文件(单文件 <20MB)，但不能代理 Release 附件，
+      # 所以把 ipa 提交到 cdn 分支。下载地址用 commit 哈希固定，内容不可变、不受 jsDelivr 分支缓存影响；
+      # 源文件 apps-*.json 按分支访问，发布后主动 purge。三个域名各出一份源，哪个能连用哪个。
+      - name: 更新国内加速源 (cdn 分支)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          IPA="DoorUnlock-${TAG}.ipa"
+          SIZE=$(stat -f%z "ios/DoorUnlock/${IPA}")
+          SCRIPT="$GITHUB_WORKSPACE/scripts/make_source.py"
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          rm -rf /tmp/cdn-branch && mkdir /tmp/cdn-branch && cd /tmp/cdn-branch
+          if git ls-remote --exit-code --heads "$URL" cdn >/dev/null 2>&1; then
+            git clone --quiet --branch cdn --single-branch "$URL" .
+          else
+            git init -q -b cdn
+            git remote add origin "$URL"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp "$GITHUB_WORKSPACE/ios/DoorUnlock/${IPA}" .
+          git add "$IPA"
+          git commit -qm "ipa: ${TAG}"
+          git push -q origin cdn
+          COMMIT=$(git rev-parse HEAD)
+          for ENTRY in gcore:gcore.jsdelivr.net cf:testingcf.jsdelivr.net fastly:fastly.jsdelivr.net; do
+            NAME="${ENTRY%%:*}"; HOST="${ENTRY#*:}"
+            python3 "$SCRIPT" --repo "$REPO" --tag "$TAG" --build "$BUILD_NUMBER" --size "$SIZE" \
+              --sha256 "$IPA_SHA256" --out "apps-${NAME}.json" \
+              --download-url "https://${HOST}/gh/${REPO}@${COMMIT}/${IPA}" \
+              --source-url "https://${HOST}/gh/${REPO}@cdn/apps-${NAME}.json" \
+              --id-suffix ".${NAME}"
+          done
+          git add apps-*.json
+          git commit -qm "source: ${TAG} (build ${BUILD_NUMBER})"
+          git push -q origin cdn
+          for NAME in gcore cf fastly; do
+            curl -s --max-time 20 "https://purge.jsdelivr.net/gh/${REPO}@cdn/apps-${NAME}.json" >/dev/null || true
+          done

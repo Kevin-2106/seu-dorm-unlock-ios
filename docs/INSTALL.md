@@ -67,6 +67,26 @@ TrollStore 装的 App 签名永久有效，不用刷新。
 
 ---
 
+## 国内加速源
+
+GitHub 的 Release 下载和 `raw.githubusercontent.com` 在国内常常很慢或打不开。仓库的 `cdn` 分支放了每个版本的 ipa 和三份源文件，通过 [jsDelivr](https://www.jsdelivr.com/) 访问：
+
+| 源 | 地址 |
+|---|---|
+| gcore | `https://gcore.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-gcore.json` |
+| cf | `https://testingcf.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-cf.json` |
+| fastly | `https://fastly.jsdelivr.net/gh/Kevin-2106/seu-dorm-unlock-ios@cdn/apps-fastly.json` |
+
+在 SideStore 里添加其中**一个**即可（三个都添加会出现三份重复的「门钥」）。哪个域名在你的网络下能连，取决于运营商，不行就换一个。
+
+**注意**
+
+- jsDelivr 缓存分支内容最长约 12 小时，刚发布的新版本可能晚一点才在加速源里出现；每次发布时 CI 会主动请求刷新缓存。ipa 的下载地址固定到 commit 哈希，不受这个缓存影响。
+- 经过第三方 CDN 就多了一层信任。**安装前建议核对 SHA-256**：每个 [Release](../../../releases) 的说明里有 ipa 的 SHA-256，加速源的版本信息里也带了同一个值。macOS / Linux 用 `shasum -a 256 文件名`，Windows 用 `certutil -hashfile 文件名 SHA256`。
+- 加速源和主源（`.../source/apps.json`）是两个独立的源，内容一致，不要同时添加。
+
+---
+
 ## 小组件扩展没装上
 
 「门钥」由两部分组成：主 App（`io.github.kevin-2106.doorkey`）和小组件扩展（`io.github.kevin-2106.doorkey.widget`）。每个都要占一个 App ID。

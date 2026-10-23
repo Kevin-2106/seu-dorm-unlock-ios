@@ -14,6 +14,11 @@ ap.add_argument("--build", required=True)       # 构建号
 ap.add_argument("--size", required=True, type=int)
 ap.add_argument("--notes", default="")
 ap.add_argument("--out", required=True)
+# 镜像源用: 覆盖下载地址 / 源自己的地址 / 标识后缀 / ipa 的 sha256
+ap.add_argument("--download-url", default="")
+ap.add_argument("--source-url", default="")
+ap.add_argument("--id-suffix", default="")
+ap.add_argument("--sha256", default="")
 a = ap.parse_args()
 
 owner = a.repo.split("/")[0]
@@ -25,11 +30,14 @@ entry = {
     "version": version,
     "buildVersion": a.build,
     "date": now,
-    "downloadURL": f"{base}/releases/download/{a.tag}/DoorUnlock-{a.tag}.ipa",
+    "downloadURL": a.download_url or f"{base}/releases/download/{a.tag}/DoorUnlock-{a.tag}.ipa",
     "size": a.size,
     "minOSVersion": "15.0",
     "localizedDescription": a.notes or f"v{version}，详见 {base}/releases/tag/{a.tag}",
 }
+
+if a.sha256:
+    entry["sha256"] = a.sha256
 
 doc = {}
 if os.path.exists(a.out):
@@ -63,10 +71,10 @@ app.update({
 
 doc = {
     "name": "门钥",
-    "identifier": f"io.github.{owner.lower()}.seu-dorm-unlock-ios",
+    "identifier": f"io.github.{owner.lower()}.seu-dorm-unlock-ios{a.id_suffix}",
     "subtitle": "SEU Dorm Unlock for iOS",
     "description": "门钥的 SideStore 源：添加后可以直接在 SideStore 里安装和更新。",
-    "sourceURL": f"https://raw.githubusercontent.com/{a.repo}/source/apps.json",
+    "sourceURL": a.source_url or f"https://raw.githubusercontent.com/{a.repo}/source/apps.json",
     "apps": [app],
     "news": [],
 }
