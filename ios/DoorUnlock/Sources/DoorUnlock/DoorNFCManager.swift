@@ -12,8 +12,13 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
     @Published var statusText = "就绪"
     @Published var log: [String] = []
+    /// 是否处于"持续监听"模式：一次会话结束(不管成功/失败/超时)后自动开一个新会话，
+    /// 体验上接近"app开着就一直能碰锁"。由 stopAutoScanning() 关掉。
+    @Published private(set) var isScanning = false
 
     private var session: NFCTagReaderSession?
+    private var autoRestartEnabled = false
+    private var restartTask: Task<Void, Never>?
 
     private func appendLog(_ msg: String) {
         log.append(msg)
@@ -23,7 +28,8 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
     var isAvailable: Bool { NFCTagReaderSession.readingAvailable }
 
-    func startUnlock() {
+    /// 开始一次 NFC 会话。`auto: true` 表示会话结束后自动重开 (持续监听模式)。
+    func startUnlock(auto: Bool = true) {
         guard isAvailable else {
             appendLog("此设备不支持 NFC 标签读取")
             statusText = "设备不支持 NFC"
@@ -36,12 +42,28 @@ final class DoorNFCManager: NSObject, ObservableObject {
             return
         }
 
+        restartTask?.cancel()
+        autoRestartEnabled = auto
+        isScanning = true
+
         let s = NFCTagReaderSession(pollingOption: [.iso14443], delegate: self, queue: nil)
         s?.alertMessage = "请将手机贴近门锁感应区"
         session = s
         statusText = "请碰锁..."
-        appendLog("开始 NFC 会话")
+        appendLog("开始 NFC 会话" + (auto ? " (持续监听)" : ""))
         s?.begin()
+    }
+
+    /// 停止持续监听：结束当前会话，且不再自动重开。
+    func stopAutoScanning() {
+        autoRestartEnabled = false
+        restartTask?.cancel()
+        restartTask = nil
+        isScanning = false
+        session?.invalidate()
+        session = nil
+        statusText = "就绪"
+        appendLog("已停止自动扫描")
     }
 
     // ─── 把 tag case 的 sendMiFareCommand 统一成一个闭包 ───
@@ -171,6 +193,17 @@ extension DoorNFCManager: NFCTagReaderSessionDelegate {
         Task { @MainActor in
             self.appendLog("会话结束: \(error.localizedDescription)")
             self.session = nil
+
+            guard self.autoRestartEnabled else {
+                self.isScanning = false
+                return
+            }
+            // 持续监听模式：稍等一下再开新会话，避免跟系统刚结束的会话抢占 NFC 硬件。
+            self.restartTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                guard !Task.isCancelled, self.autoRestartEnabled else { return }
+                self.startUnlock(auto: true)
+            }
         }
     }
 

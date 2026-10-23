@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var ble = DoorBLEManager()
     @StateObject private var nfc = DoorNFCManager()
     @AppStorage("agreed_disclaimer") private var agreedDisclaimer = false
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var deviceIdText = ""
     @State private var projectIdText = ""
@@ -82,10 +83,21 @@ struct ContentView: View {
                 }
 
                 Section("碰锁开门 (NFC)") {
-                    Text(nfc.statusText).font(.footnote).foregroundStyle(.secondary)
-                    Button("碰锁开门") { nfc.startUnlock() }
-                        .buttonStyle(.bordered)
-                        .disabled(!nfc.isAvailable)
+                    HStack {
+                        Circle()
+                            .fill(nfc.isScanning ? Color.green : Color.gray)
+                            .frame(width: 10, height: 10)
+                        Text(nfc.statusText).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if nfc.isScanning {
+                        Text("持续监听中，app 开着就可以随时碰锁").font(.caption).foregroundStyle(.secondary)
+                        Button("停止扫描") { nfc.stopAutoScanning() }
+                            .buttonStyle(.bordered)
+                    } else {
+                        Button("开始碰锁开门") { nfc.startUnlock() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!nfc.isAvailable)
+                    }
                     if !nfc.isAvailable {
                         Text("此设备不支持 NFC 读卡").font(.caption).foregroundStyle(.red)
                     }
@@ -112,8 +124,33 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("门锁 (自用版)")
-            .onAppear(perform: loadSettings)
+            .onAppear {
+                loadSettings()
+                startAutoNFCIfPossible()
+            }
+            .onChange(of: scenePhase) { newPhase in
+                switch newPhase {
+                case .active:
+                    startAutoNFCIfPossible()
+                case .background:
+                    // 真正退到后台才停：NFC 系统弹窗("请贴近")会让 scenePhase 短暂变成
+                    // .inactive，不是真的离开 app，那种瞬时状态不处理，否则会跟弹窗自己的
+                    // 生命周期打架，把刚开的会话又取消掉。
+                    nfc.stopAutoScanning()
+                default:
+                    break
+                }
+            }
         }
+    }
+
+    /// app 一打开(或从后台回来)就自动进入 NFC 持续监听模式，
+    /// 不用再手动点按钮——前提是已经配置好凭证。
+    private func startAutoNFCIfPossible() {
+        guard agreedDisclaimer, nfc.isAvailable, !nfc.isScanning else { return }
+        let s = SettingsManager.shared
+        guard s.isConfigured(), s.deviceId != 0 else { return }
+        nfc.startUnlock(auto: true)
     }
 
     private var stateColor: Color {
