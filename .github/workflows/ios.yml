@@ -1,9 +1,15 @@
 name: Build iOS (ad-hoc signed ipa)
 
-# 只手动触发：macOS runner 分钟数较贵，不挂 push 自动触发，
-# 需要联调时用 `gh workflow run ios.yml` 或在 Actions 页面点 "Run workflow"。
+# 只手动触发或打 tag：macOS runner 分钟数较贵，不挂普通 push 自动触发。
+#   手动: `gh workflow run ios.yml` 或在 Actions 页面点 "Run workflow"
+#   发布: 推送形如 v1.0.0 的 tag，构建后自动创建 Release 并挂上 .ipa
 on:
   workflow_dispatch:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write   # 创建 Release 需要
 
 jobs:
   build:
@@ -34,8 +40,14 @@ jobs:
         run: |
           set -o pipefail
           COMMIT=$(git rev-parse --short HEAD)
-          echo "build号=${{ github.run_number }} commit=$COMMIT"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="1.0"
+          fi
+          echo "version=$VERSION build号=${{ github.run_number }} commit=$COMMIT"
           xcodebuild -project DoorUnlock.xcodeproj \
+            MARKETING_VERSION=$VERSION \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             BUILD_COMMIT=$COMMIT \
             -scheme DoorUnlock \
@@ -84,6 +96,9 @@ jobs:
           cp -R "$APP_PATH" Payload/
           zip -qr DoorUnlock-adhoc.ipa Payload
           ls -la DoorUnlock-adhoc.ipa
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            cp DoorUnlock-adhoc.ipa "DoorUnlock-${GITHUB_REF_NAME}.ipa"
+          fi
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -91,3 +106,16 @@ jobs:
           name: DoorUnlock-adhoc-ipa
           path: ios/DoorUnlock/DoorUnlock-adhoc.ipa
           if-no-files-found: error
+
+      # 推送 v* tag 时，把带版本号的 .ipa 发布到 Releases
+      - name: 发布到 Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ios/DoorUnlock/DoorUnlock-${{ github.ref_name }}.ipa
+          generate_release_notes: true
+          body: |
+            ad-hoc 签名的 `.ipa`，用 TrollStore / SideStore 安装。安装与使用见 [README](https://github.com/${{ github.repository }}#安装)。
+
+            - NFC 开门需要 TrollStore / 越狱 / 付费开发者账号；SideStore + 免费 Apple ID 只能用蓝牙。
+            - 构建号 ${{ github.run_number }}，commit `${{ github.sha }}`。
