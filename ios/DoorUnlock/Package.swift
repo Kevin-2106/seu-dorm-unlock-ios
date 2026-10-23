@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "DoorCrypto",
     targets: [
-        .target(name: "DoorCrypto", path: "Sources/DoorUnlock", sources: ["Crypto.swift"]),
+        .target(name: "DoorCrypto", path: "Sources/DoorUnlock", sources: ["Crypto.swift", "UnlockFailure.swift"]),
         .testTarget(name: "CryptoTests", dependencies: ["DoorCrypto"], path: "Tests/CryptoTests"),
     ]
 )

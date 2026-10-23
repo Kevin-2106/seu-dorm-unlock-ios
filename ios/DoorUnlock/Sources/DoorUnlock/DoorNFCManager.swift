@@ -12,6 +12,8 @@ final class DoorNFCManager: NSObject, ObservableObject {
 
     @Published var statusText = "就绪"
     @Published var log: [String] = []
+    /// 最近一次开门失败的原因；下一次碰到标签或开门成功时清空
+    @Published var failure: UnlockFailure?
     /// 是否处于"持续监听"模式：一次会话结束(不管成功/失败/超时)后自动开一个新会话，
     /// 体验上接近"app开着就一直能碰锁"。由 stopAutoScanning() 关掉。
     @Published private(set) var isScanning = false
@@ -128,6 +130,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
         }
 
         appendLog("标签 UID: \(identifierHex(of: tag))")
+        failure = nil
 
         let settings = SettingsManager.shared
         let cmd = DoorCrypto.buildNfcOpenCommand(deviceId: settings.deviceId, projectId: settings.projectId, chainKeyHex: settings.chainKey)
@@ -157,6 +160,7 @@ final class DoorNFCManager: NSObject, ObservableObject {
             appendLog("✗ 3 次均未获得合法 0xB1 响应")
             session.invalidate(errorMessage: "门锁无响应，请重试")
             statusText = "门锁无响应"
+            failure = .plain("门锁无响应", hint: "手机贴紧感应区，保持不动再试一次。")
             return
         }
 
@@ -167,6 +171,11 @@ final class DoorNFCManager: NSObject, ObservableObject {
             appendLog("✗ 开锁失败: \(msg) (resultCode=\(result.resultCode))")
             session.invalidate(errorMessage: msg)
             statusText = "开门失败: \(msg)"
+            if result.resultCode > 0 {
+                failure = UnlockFailure.fromCode(result.resultCode)
+            } else {
+                failure = UnlockFailure.plain("开门失败: \(msg)")
+            }
             return
         }
 

@@ -21,6 +21,12 @@ struct LockSettingsView: View {
                     Task { await loginAndFetch() }
                 }
                 .disabled(isFetching || phone.isEmpty || password.isEmpty)
+                if CredentialRefresher.hasSavedAccount() {
+                    Button("用已保存的账号重新拉取") {
+                        Task { await refreshSaved() }
+                    }
+                    .disabled(isFetching)
+                }
                 if !fetchStatus.isEmpty {
                     Text(fetchStatus).font(.footnote).foregroundStyle(.secondary)
                 }
@@ -29,7 +35,7 @@ struct LockSettingsView: View {
             Section {
                 Button("导出配置码到剪贴板") {
                     ShareableConfig.fromCurrentSettings().copyToPasteboard()
-                    configStatus = "✓ 已复制，去另一台设备粘贴导入"
+                    configStatus = "✓ 已复制 (60 秒内有效)，去另一台设备粘贴导入"
                 }
                 .disabled(!SettingsManager.shared.isConfigured())
 
@@ -47,7 +53,7 @@ struct LockSettingsView: View {
             } header: {
                 Text("配置码 (同账号多设备共享)")
             } footer: {
-                Text("配置码只是已拉取到的开门凭据，不含账号密码。在第一台设备登录拉取后，\n其余设备直接导出/导入配置码即可，不用再重新登录(避免反复顶掉官方 app 的会话)。")
+                Text("⚠️ 配置码相当于这把锁的钥匙，不要发给别人。复制后 60 秒会自动从剪贴板清除。\n\n配置码只是已拉取到的开门凭据，不含账号密码。在第一台设备登录拉取后，其余设备直接导入即可，不用再登录(避免反复顶掉官方 app 的会话)。若导入后失效，在那台设备上点「用已保存的账号重新拉取」或重新登录。")
             }
 
             Section {
@@ -58,6 +64,17 @@ struct LockSettingsView: View {
         }
         .navigationTitle("门锁")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func refreshSaved() async {
+        isFetching = true
+        fetchStatus = "拉取中..."
+        switch await CredentialRefresher.refresh() {
+        case .ok: fetchStatus = "✓ 凭据已更新"
+        case .needLogin: fetchStatus = "没有保存的账号，请先登录"
+        case .failed(let m): fetchStatus = m
+        }
+        isFetching = false
     }
 
     private func loginAndFetch() async {

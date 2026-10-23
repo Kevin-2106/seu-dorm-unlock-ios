@@ -75,8 +75,13 @@ struct ShareableConfig: Codable {
 
     // ─── 剪贴板便捷方法 ───
 
+    /// 配置码相当于钥匙，放进剪贴板 60 秒后由系统自动清除 (到期时间由系统处理，App 不在前台也有效)。
+    static let pasteboardLifetime: TimeInterval = 60
+
     func copyToPasteboard() {
-        UIPasteboard.general.string = encoded()
+        UIPasteboard.general.setItems(
+            [["public.utf8-plain-text": encoded()]],
+            options: [.expirationDate: Date().addingTimeInterval(Self.pasteboardLifetime)])
     }
 
     static func fromPasteboard() -> ShareableConfig? {

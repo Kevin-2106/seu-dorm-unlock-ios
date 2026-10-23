@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var warpClock = WarpClock()   // 引用类型，跃迁粒子的累积相位
 
     @State private var showSettings = false
+    @State private var isRefreshingCredentials = false
+    @State private var refreshNote = ""
     @State private var breathe = false        // 待机呼吸光晕
     @State private var charge: Double = 0     // 蓄力 0...1 (开门中缓慢上升)
     @State private var pulse: Double = 0      // 成功时粒子向外一推再回落
@@ -560,17 +562,78 @@ struct HomeView: View {
     }
 
     private var statusCardContent: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(buttonTint)
-                .frame(width: 10, height: 10)
-            Text(ble.statusText)
-                .font(.system(size: 15, design: .rounded))
-                .foregroundStyle(.white)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(buttonTint)
+                    .frame(width: 10, height: 10)
+                Text(activeFailure?.title ?? ble.statusText)
+                    .font(.system(size: 15, design: .rounded))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+            }
+            if let f = activeFailure {
+                if !f.hint.isEmpty {
+                    Text(f.hint)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                if let action = f.action {
+                    recoveryButton(action)
+                }
+            }
+            if !refreshNote.isEmpty {
+                Text(refreshNote)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
         }
         .padding(16)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 蓝牙失败优先；否则看 NFC 最近一次失败
+    private var activeFailure: UnlockFailure? {
+        if ble.state == .failed, let f = ble.failure { return f }
+        if ble.state != .failed, ble.state != .success, let f = nfc.failure { return f }
+        return nil
+    }
+
+    private func recoveryButton(_ action: UnlockFailure.Action) -> some View {
+        Button {
+            switch action {
+            case .openLogin:
+                showSettings = true
+            case .refreshCredentials:
+                Task { await refreshCredentials() }
+            }
+        } label: {
+            Text(action == .openLogin ? "去登录" : (isRefreshingCredentials ? "拉取中..." : "重新拉取凭据"))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(.white.opacity(0.18), in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .disabled(isRefreshingCredentials)
+    }
+
+    private func refreshCredentials() async {
+        isRefreshingCredentials = true
+        refreshNote = ""
+        let outcome = await CredentialRefresher.refresh()
+        isRefreshingCredentials = false
+        switch outcome {
+        case .ok:
+            ble.clearFailure(status: "凭据已更新，请重新开门")
+            nfc.failure = nil
+            refreshNote = ""
+        case .needLogin:
+            refreshNote = "还没有保存账号，请先登录。"
+            showSettings = true
+        case .failed(let msg):
+            refreshNote = msg
+        }
     }
 
     // MARK: - NFC 持续监听提示条

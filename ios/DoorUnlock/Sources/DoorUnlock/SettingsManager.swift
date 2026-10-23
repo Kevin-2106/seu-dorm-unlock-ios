@@ -36,6 +36,7 @@ final class SettingsManager: ObservableObject {
 
     private enum KeychainKey {
         static let loginPassword = "login_password"
+        static let chainKey = "chain_key"
     }
 
     var deviceId: Int32 {
@@ -53,9 +54,53 @@ final class SettingsManager: ObservableObject {
         set { objectWillChange.send(); defaults.set(Int(newValue), forKey: Key.credentialId) }
     }
 
+    /// chainKey 是开门的实际凭据，优先存 Keychain。
+    ///
+    /// 迁移/回退策略 (宁可多存一份也不能把钥匙弄丢):
+    /// - 读: Keychain 有就用；没有就读旧的 UserDefaults，并尝试迁到 Keychain。
+    /// - 写: 先写 Keychain 并读回校验，通过了才删 UserDefaults 里的副本；
+    ///   写失败 (有些侧载签名下没有 Keychain 权限) 就留在 UserDefaults 里，不丢。
     var chainKey: String {
-        get { defaults.string(forKey: Key.chainKey) ?? "" }
-        set { objectWillChange.send(); defaults.set(newValue, forKey: Key.chainKey) }
+        get {
+            if let cached = chainKeyCache { return cached }
+            let value = loadChainKey()
+            chainKeyCache = value
+            return value
+        }
+        set {
+            objectWillChange.send()
+            chainKeyCache = newValue
+            storeChainKey(newValue)
+        }
+    }
+
+    private var chainKeyCache: String?
+
+    /// 当前 chainKey 实际存在哪，给「关于」页显示
+    var chainKeyStorage: String {
+        if Keychain.read(KeychainKey.chainKey) != nil { return "Keychain" }
+        if defaults.string(forKey: Key.chainKey) != nil { return "本地 (Keychain 不可用，已回退)" }
+        return "无"
+    }
+
+    private func loadChainKey() -> String {
+        if let k = Keychain.read(KeychainKey.chainKey), !k.isEmpty { return k }
+        let legacy = defaults.string(forKey: Key.chainKey) ?? ""
+        if !legacy.isEmpty { storeChainKey(legacy) }   // 一次性迁移
+        return legacy
+    }
+
+    private func storeChainKey(_ value: String) {
+        if value.isEmpty {
+            Keychain.delete(KeychainKey.chainKey)
+            defaults.removeObject(forKey: Key.chainKey)
+            return
+        }
+        if Keychain.save(KeychainKey.chainKey, value: value), Keychain.read(KeychainKey.chainKey) == value {
+            defaults.removeObject(forKey: Key.chainKey)
+        } else {
+            defaults.set(value, forKey: Key.chainKey)
+        }
     }
 
     var deviceMac: String {
@@ -141,9 +186,10 @@ final class SettingsManager: ObservableObject {
     func isLoggedIn() -> Bool { !platformToken.isEmpty }
 }
 
-/// 极简 Keychain 包装 (仅用于密码这一个字段)
+/// 极简 Keychain 包装 (密码、chainKey)
 enum Keychain {
-    static func save(_ key: String, value: String) {
+    @discardableResult
+    static func save(_ key: String, value: String) -> Bool {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -152,7 +198,16 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
         var attrs = query
         attrs[kSecValueData as String] = data
-        SecItemAdd(attrs as CFDictionary, nil)
+        attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        return SecItemAdd(attrs as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func delete(_ key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     static func read(_ key: String) -> String? {

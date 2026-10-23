@@ -16,6 +16,8 @@ final class DoorBLEManager: NSObject, ObservableObject {
     @Published var state: State = .idle
     @Published var statusText: String = "就绪"
     @Published var log: [String] = []
+    /// 最近一次失败的原因和可点的补救动作；状态回到 idle/成功时清空
+    @Published var failure: UnlockFailure?
 
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
@@ -46,6 +48,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
 
     // ─── 开门主流程 ───
     func unlock() async {
+        failure = nil
         state = .unlocking
         statusText = "准备中..."
         let settings = SettingsManager.shared
@@ -124,6 +127,8 @@ final class DoorBLEManager: NSObject, ObservableObject {
 
         do {
             try await runUnlockSequence()
+        } catch let e as UnlockError {
+            fail(e.failure)
         } catch {
             fail(error.localizedDescription)
         }
@@ -131,10 +136,22 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func fail(_ message: String) {
-        appendLog("失败: \(message)")
+        fail(.plain(message))
+    }
+
+    private func fail(_ f: UnlockFailure) {
+        appendLog("失败: \(f.title)" + (f.code.map { " (resultCode=\($0))" } ?? ""))
+        failure = f
         state = .failed
-        statusText = message
+        statusText = f.title
         disconnect()
+    }
+
+    /// 补救动作成功后 (比如重新拉取了凭据) 把界面恢复成可再次开门的状态
+    func clearFailure(status: String = "就绪") {
+        failure = nil
+        if state == .failed { state = .idle }
+        statusText = status
     }
 
     private func runUnlockSequence() async throws {
@@ -183,25 +200,43 @@ final class DoorBLEManager: NSObject, ObservableObject {
             }
         } else if unlockResult.resultCode == 25 {
             appendLog("离线次数已用完, 从服务器刷新凭证...")
-            guard settings.isLoggedIn() else { throw UnlockError.message("离线次数已用完\n请在设置中登录后重试") }
+            guard settings.isLoggedIn() || CredentialRefresher.hasSavedAccount() else {
+                throw UnlockError.detailed(UnlockFailure(title: "离线开门次数用完 (25)", hint: "需要先在设置里登录一次。", code: 25, action: .openLogin))
+            }
             statusText = "刷新凭证中..."
-            guard await refreshChainKeyFromServer() else { throw UnlockError.message("刷新凭证失败, 请用原 App 开门一次") }
+            guard await refreshChainKeyFromServer() else {
+                throw UnlockError.detailed(UnlockFailure(title: "刷新凭据失败", hint: "网络或账号有问题；可点下面重试，或用官方 App 开一次门。", action: .refreshCredentials))
+            }
             try await retryUnlockWithNewKey()
         } else if unlockResult.resultCode == 24 {
             appendLog("凭证过期(0x18), 从服务器刷新凭证...")
             statusText = "登录服务器..."
-            guard await ensureLoggedIn() else { throw UnlockError.message("凭证已过期\n请在设置中登录后重试") }
+            guard await ensureLoggedIn() else {
+                throw UnlockError.detailed(UnlockFailure(title: "凭据已过期 (24)", hint: "自动登录失败，请到设置里重新登录。", code: 24, action: .openLogin))
+            }
             statusText = "刷新凭证中..."
-            guard await refreshChainKeyFromServer() else { throw UnlockError.message("刷新凭证失败, 请用原 App 开门一次") }
+            guard await refreshChainKeyFromServer() else {
+                throw UnlockError.detailed(UnlockFailure(title: "刷新凭据失败", hint: "网络或账号有问题；可点下面重试，或用官方 App 开一次门。", action: .refreshCredentials))
+            }
             try await retryUnlockWithNewKey()
         } else {
-            throw UnlockError.message("开锁失败: 错误码 \(unlockResult.resultCode)")
+            throw UnlockError.code(Int(unlockResult.resultCode))
         }
     }
 
     enum UnlockError: Error, LocalizedError {
         case message(String)
-        var errorDescription: String? { if case .message(let m) = self { return m }; return nil }
+        case detailed(UnlockFailure)
+        case code(Int)
+
+        var failure: UnlockFailure {
+            switch self {
+            case .message(let m): return .plain(m)
+            case .detailed(let f): return f
+            case .code(let c): return .fromCode(c)
+            }
+        }
+        var errorDescription: String? { failure.title }
     }
 
     // ─── 密钥更新 (0x76 → N×0x77) ───
@@ -247,18 +282,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
     }
 
     private func refreshChainKeyFromServer() async -> Bool {
-        do {
-            let addr = try await ServerApi.fetchAddress()
-            guard !addr.chainKey.isEmpty else { return false }
-            let settings = SettingsManager.shared
-            settings.chainKey = addr.chainKey
-            settings.credentialId = addr.credentialId
-            appendLog("已从服务器获取新 chainKey: \(addr.chainKey.prefix(16))...")
-            return true
-        } catch {
-            appendLog("刷新凭证异常: \(error.localizedDescription)")
-            return false
-        }
+        await CredentialRefresher.refresh(log: { [weak self] in self?.appendLog($0) }) == .ok
     }
 
     private func retryUnlockWithNewKey() async throws {
@@ -286,7 +310,7 @@ final class DoorBLEManager: NSObject, ObservableObject {
             state = .success
             statusText = "开门成功 🔓"
         } else {
-            throw UnlockError.message("重试失败: 错误码 \(unlR2.resultCode)")
+            throw UnlockError.code(Int(unlR2.resultCode))
         }
     }
 

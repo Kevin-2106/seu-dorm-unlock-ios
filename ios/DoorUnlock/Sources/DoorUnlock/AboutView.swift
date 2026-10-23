@@ -15,6 +15,11 @@ struct AboutView: View {
                     Spacer()
                     Text(BuildInfo.widgetExtensionInstalled ? "已安装" : "未安装").foregroundStyle(.secondary)
                 }
+                HStack {
+                    Text("凭据存储")
+                    Spacer()
+                    Text(SettingsManager.shared.chainKeyStorage).foregroundStyle(.secondary)
+                }
             } footer: {
                 if !BuildInfo.widgetExtensionInstalled {
                     Text("未安装 = 侧载时被移除了 (免费 Apple ID 只有 10 个 App ID 额度，扩展要多占 1 个)。\n没有扩展也能用: 在\"快捷指令\"里添加\"开门\"动作，放到锁屏快捷指令控制 / Action 按钮 / 轻点背面 / Siri。")
