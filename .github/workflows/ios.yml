@@ -29,7 +29,7 @@ jobs:
         working-directory: ios/DoorUnlock
         run: xcodegen generate
 
-      - name: 构建 (真机架构，ad-hoc 签名以嵌入 entitlements)
+      - name: 构建 (真机架构，不签名)
         working-directory: ios/DoorUnlock
         run: |
           set -o pipefail
@@ -38,12 +38,8 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGNING_REQUIRED=YES \
-            DEVELOPMENT_TEAM= \
-            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             build 2>&1 | tee build.log
           STATUS=$?
@@ -53,12 +49,16 @@ jobs:
             exit $STATUS
           fi
 
-      - name: 验证 entitlements 确实嵌进签名了
+      - name: 用 codesign 命令行工具手动 ad-hoc 签名，嵌入 NFC entitlements
         working-directory: ios/DoorUnlock
         run: |
           APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "DoorUnlock.app" -path "*Release-iphoneos*" | head -1)
           echo "APP_PATH=$APP_PATH"
-          codesign -d --entitlements :- "$APP_PATH" 2>&1 || echo "(codesign 读取失败，但不一定致命，继续打包)"
+          codesign --force --deep --sign - \
+            --entitlements Sources/DoorUnlock.entitlements \
+            "$APP_PATH"
+          echo "===== 校验签名里的 entitlements ====="
+          codesign -d --entitlements :- "$APP_PATH"
 
       - name: 打包为 ipa (交给越狱机 TrollStore 侧载)
         working-directory: ios/DoorUnlock
