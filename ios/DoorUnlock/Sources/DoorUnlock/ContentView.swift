@@ -12,9 +12,7 @@ struct ContentView: View {
         if !agreedDisclaimer {
             disclaimerView
         } else {
-            NavigationView {
-                HomeView(ble: ble, nfc: nfc)
-            }
+            HomeView(ble: ble, nfc: nfc)
             .onAppear { startAutoNFCIfPossible() }
             .onChange(of: scenePhase) { newPhase in
                 switch newPhase {

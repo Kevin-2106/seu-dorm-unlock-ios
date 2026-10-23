@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var ble: DoorBLEManager
     @ObservedObject var nfc: DoorNFCManager
     @ObservedObject private var background = BackgroundImageStore.shared
+    @AppStorage("button_fill_transparent") private var transparentFill = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var deviceIdText: String
@@ -75,7 +76,8 @@ struct SettingsView: View {
                     Text("配置码只是已拉取到的开门凭据，不含账号密码。在第一台设备登录拉取后，\n其余设备直接导出/导入配置码即可，不用再重新登录(避免反复顶掉官方 app 的会话)。")
                 }
 
-                Section("首页背景") {
+                Section("首页外观") {
+                    Toggle("开锁按钮透明填充", isOn: $transparentFill)
                     if #available(iOS 16.0, *) {
                         BackgroundPickerRow()
                     } else {
