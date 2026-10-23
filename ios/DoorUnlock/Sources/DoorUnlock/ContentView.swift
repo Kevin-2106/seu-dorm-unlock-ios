@@ -80,7 +80,14 @@ struct ContentView: View {
                     .disabled(ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking)
                 }
 
-                Section("通讯日志") {
+                Section("网络日志 (调试用，排查登录/拉凭证问题)") {
+                    ForEach(Array(ServerApi.debugLog.suffix(100).enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.system(size: 10, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+
+                Section("蓝牙通讯日志") {
                     ForEach(ble.log.suffix(50), id: \.self) { line in
                         Text(line).font(.system(size: 11, design: .monospaced))
                     }

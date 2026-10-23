@@ -20,6 +20,14 @@ enum ServerApi {
 
     private static let PLATFORM_SERVER = "https://pm.whxinna.com"
 
+    /// 网络调试日志 (环形缓冲，供 UI 显示用于排查真实接口返回结构)
+    static var debugLog: [String] = []
+    private static func logD(_ s: String) {
+        debugLog.append(s)
+        if debugLog.count > 300 { debugLog.removeFirst() }
+        print("[ServerApi] \(s)")
+    }
+
     private static func apiServer() -> String {
         let s = SettingsManager.shared.projectServerUrl
         return s.isEmpty ? PLATFORM_SERVER : s
@@ -167,33 +175,53 @@ enum ServerApi {
             do {
                 let (code, json, bodyStr) = try await getJSON("\(srv)/webapi/users/login?\(q)")
                 attempts.append("\(srv) → \(code) \(bodyStr.prefix(120))")
+                logD("login \(srv) → HTTP \(code)")
+                logD("login body(完整): \(bodyStr)")
                 if code == 404 || bodyStr.isEmpty { continue }
-                guard (json["result"] as? Bool) == true else { continue }
+                guard (json["result"] as? Bool) == true else {
+                    logD("login result!=true, 顶层keys=\(json.keys.sorted())")
+                    continue
+                }
 
                 var token = json["platform_token"] as? String ?? ""
 
                 var dataJson = json["data"] as? [String: Any]
                 if dataJson == nil, let dataB64 = json["data"] as? String, !dataB64.isEmpty {
                     let decoded = decodeBase64Data(dataB64)
+                    logD("data(base64解码后): \(decoded)")
                     if let d = decoded.data(using: .utf8) {
                         dataJson = try? JSONSerialization.jsonObject(with: d) as? [String: Any]
                     }
                 }
+                logD("dataJson keys=\(dataJson?.keys.sorted() ?? [])")
 
                 let s = SettingsManager.shared
                 if let dj = dataJson {
                     if token.isEmpty { token = dj["platform_token"] as? String ?? "" }
                     if let userInfo = dj["user_info"] as? [String: Any] {
+                        logD("user_info keys=\(userInfo.keys.sorted())")
                         let uid = userInfo["id"] as? String ?? (userInfo["id"] as? NSNumber)?.stringValue ?? ""
                         let idCode = userInfo["identity_code"] as? String ?? ""
                         if !uid.isEmpty { s.userId = uid }
                         if !idCode.isEmpty { s.identityCode = idCode }
+                    } else {
+                        logD("dataJson 无 user_info 字段")
                     }
-                    if let info = dj["server_info"] as? [String: Any] { parseServerInfo(info) }
+                    if let info = dj["server_info"] as? [String: Any] {
+                        logD("server_info keys=\(info.keys.sorted())")
+                        parseServerInfo(info)
+                    } else {
+                        logD("dataJson 无 server_info 字段")
+                    }
                 }
 
-                if let topInfo = json["server_info"] as? [String: Any] { parseServerInfo(topInfo) }
+                if let topInfo = json["server_info"] as? [String: Any] {
+                    logD("顶层 server_info keys=\(topInfo.keys.sorted())")
+                    parseServerInfo(topInfo)
+                }
                 if let topSrv = json["server_addr"] as? String, !topSrv.isEmpty { s.projectServerUrl = topSrv }
+
+                logD("解析结果: userId=\(s.userId) identityCode前10=\(s.identityCode.prefix(10)) projectServerUrl=\(s.projectServerUrl) projectSignKey前8=\(s.projectSignKey.prefix(8)) projectSessionKey前8=\(s.projectSessionKey.prefix(8)) serverAppId=\(s.serverAppId) serverId=\(s.serverId)")
 
                 if !token.isEmpty {
                     s.platformToken = token
@@ -228,7 +256,11 @@ enum ServerApi {
 
         let signed = signGtRequest()
         let q = query(signed, encode: true)
-        let (_, json, bodyStr) = try await getJSON("\(s.projectServerUrl)/webapi/v1/staff/credentials?\(q)")
+        let url = "\(s.projectServerUrl)/webapi/v1/staff/credentials?\(q)"
+        logD("fetchAddress 请求: \(url)")
+        logD("fetchAddress 签名参数(未编码): \(signed)")
+        let (code, json, bodyStr) = try await getJSON(url)
+        logD("fetchAddress 响应: HTTP \(code) body=\(bodyStr)")
 
         guard (json["result"] as? Bool) == true else {
             let msg = (json["msg"] as? String).flatMap { $0.isEmpty ? nil : $0 }
