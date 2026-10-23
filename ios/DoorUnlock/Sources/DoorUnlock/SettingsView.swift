@@ -1,21 +1,40 @@
 import SwiftUI
+import PhotosUI
 
 /// 设置页：账号登录、门锁参数、配置码导入导出、各种调试日志。
 /// 首页只留开门按钮，细节都在这。
 struct SettingsView: View {
     @ObservedObject var ble: DoorBLEManager
     @ObservedObject var nfc: DoorNFCManager
+    @ObservedObject private var background = BackgroundImageStore.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var pickedPhotoItem: PhotosPickerItem?
 
-    @State private var deviceIdText = ""
-    @State private var projectIdText = ""
-    @State private var credentialIdText = ""
-    @State private var chainKeyText = ""
-    @State private var phone = ""
+    @State private var deviceIdText: String
+    @State private var projectIdText: String
+    @State private var credentialIdText: String
+    @State private var chainKeyText: String
+    @State private var phone: String
     @State private var password = ""
     @State private var fetchStatus = ""
     @State private var isFetching = false
     @State private var configStatus = ""
+    @State private var saveStatus = ""
+
+    /// 自定义 init：把当前已保存的参数在视图"创建"的这一刻就灌进 @State，
+    /// 而不是等 .onAppear 之后才赋值。之前只靠 onAppear 时，Form 里的 TextField
+    /// 在首次渲染那一帧用的还是空字符串，SwiftUI 的 List/Form 对已渲染过的行
+    /// 有时不会因为后续 state 更新就主动重绘，表现为"要点一下输入框才会显示出来"。
+    init(ble: DoorBLEManager, nfc: DoorNFCManager) {
+        self.ble = ble
+        self.nfc = nfc
+        let s = SettingsManager.shared
+        _deviceIdText = State(initialValue: s.deviceId == 0 ? "" : String(s.deviceId))
+        _projectIdText = State(initialValue: s.projectId == 0 ? "" : String(s.projectId))
+        _credentialIdText = State(initialValue: s.credentialId == 0 ? "" : String(s.credentialId))
+        _chainKeyText = State(initialValue: s.chainKey)
+        _phone = State(initialValue: s.loginPhone)
+    }
 
     var body: some View {
         NavigationView {
@@ -57,6 +76,27 @@ struct SettingsView: View {
                     Text("配置码只是已拉取到的开门凭据，不含账号密码。在第一台设备登录拉取后，\n其余设备直接导出/导入配置码即可，不用再重新登录(避免反复顶掉官方 app 的会话)。")
                 }
 
+                Section("首页背景") {
+                    if #available(iOS 16.0, *) {
+                        PhotosPicker(selection: $pickedPhotoItem, matching: .images) {
+                            Label("选择背景图片", systemImage: "photo")
+                        }
+                        .onChange(of: pickedPhotoItem) { newItem in
+                            Task {
+                                guard let item = newItem,
+                                      let data = try? await item.loadTransferable(type: Data.self),
+                                      let uiImage = UIImage(data: data) else { return }
+                                background.save(uiImage)
+                            }
+                        }
+                    } else {
+                        Text("自定义背景需要 iOS 16 及以上").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if background.image != nil {
+                        Button("恢复默认背景", role: .destructive) { background.clear() }
+                    }
+                }
+
                 Section("门锁参数 (登录拉取/导入配置码后自动填入，可手动修改)") {
                     TextField("设备ID (deviceId)", text: $deviceIdText).keyboardType(.numberPad)
                     TextField("项目ID (projectId)", text: $projectIdText).keyboardType(.numberPad)
@@ -65,6 +105,9 @@ struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Button("保存参数") { saveSettings() }
+                    if !saveStatus.isEmpty {
+                        Text(saveStatus).font(.footnote).foregroundStyle(.green)
+                    }
                 }
 
                 Section("NFC 通讯日志") {
@@ -112,6 +155,13 @@ struct SettingsView: View {
         s.projectId = Int32(projectIdText) ?? 0
         s.credentialId = Int32(credentialIdText) ?? 0
         s.chainKey = chainKeyText
+        saveStatus = "✓ 已保存 (\(formattedNow()))"
+    }
+
+    private func formattedNow() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: Date())
     }
 
     private func loginAndFetch() async {

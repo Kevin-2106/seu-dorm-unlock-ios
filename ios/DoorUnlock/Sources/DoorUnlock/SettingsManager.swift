@@ -1,10 +1,16 @@
 import Foundation
 import Security
+import Combine
 
 /// 凭证参数持久化存储 (移植自 Android 版 SettingsManager.kt)
 ///
 /// 密码使用 Keychain，其余用 UserDefaults —— 与 Android 版用途一致，只是存储后端不同。
-final class SettingsManager {
+///
+/// 遵循 ObservableObject: 单例本身不是靠 SwiftUI 的 @State 驱动的，光改 UserDefaults
+/// 不会让任何界面自动刷新。给会影响界面显示的字段的 setter 都加一句
+/// `objectWillChange.send()`，页面那边用 `@ObservedObject var settings = SettingsManager.shared`
+/// 持有它，改了就能立刻反映到所有正在显示的界面上 (不用等 sheet 关闭之类的间接触发)。
+final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
     private let defaults = UserDefaults.standard
 
@@ -34,27 +40,27 @@ final class SettingsManager {
 
     var deviceId: Int32 {
         get { Int32(defaults.integer(forKey: Key.deviceId)) }
-        set { defaults.set(Int(newValue), forKey: Key.deviceId) }
+        set { objectWillChange.send(); defaults.set(Int(newValue), forKey: Key.deviceId) }
     }
 
     var projectId: Int32 {
         get { Int32(defaults.integer(forKey: Key.projectId)) }
-        set { defaults.set(Int(newValue), forKey: Key.projectId) }
+        set { objectWillChange.send(); defaults.set(Int(newValue), forKey: Key.projectId) }
     }
 
     var credentialId: Int32 {
         get { Int32(defaults.integer(forKey: Key.credentialId)) }
-        set { defaults.set(Int(newValue), forKey: Key.credentialId) }
+        set { objectWillChange.send(); defaults.set(Int(newValue), forKey: Key.credentialId) }
     }
 
     var chainKey: String {
         get { defaults.string(forKey: Key.chainKey) ?? "" }
-        set { defaults.set(newValue, forKey: Key.chainKey) }
+        set { objectWillChange.send(); defaults.set(newValue, forKey: Key.chainKey) }
     }
 
     var deviceMac: String {
         get { defaults.string(forKey: Key.deviceMac) ?? "" }
-        set { defaults.set(newValue, forKey: Key.deviceMac) }
+        set { objectWillChange.send(); defaults.set(newValue, forKey: Key.deviceMac) }
     }
 
     /// 上次成功连接的 CBPeripheral.identifier（iOS 给每台设备+每个蓝牙外设配对关系分配的

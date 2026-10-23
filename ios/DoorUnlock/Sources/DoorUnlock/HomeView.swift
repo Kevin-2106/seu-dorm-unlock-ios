@@ -3,16 +3,18 @@ import SwiftUI
 /// 首页：只留"开门"这一件事，参数配置/日志都挪到设置页。
 /// iOS 26+ 用 Liquid Glass 材质 (glassEffect/.glassProminent)，更低版本 (iPhone 7 封顶 iOS15)
 /// 退回常规的 Material/borderedProminent，两边都能编译、都能用。
+/// 背景支持自定义图片 (设置页选)，没设就用深色渐变兜底。
 struct HomeView: View {
     @ObservedObject var ble: DoorBLEManager
     @ObservedObject var nfc: DoorNFCManager
+    @ObservedObject private var s = SettingsManager.shared
+    @ObservedObject private var background = BackgroundImageStore.shared
     @State private var showSettings = false
-
-    private let s = SettingsManager.shared
+    @State private var pulse = false
 
     var body: some View {
         ZStack {
-            backgroundGradient
+            backgroundLayer
 
             VStack(spacing: 28) {
                 Spacer()
@@ -42,15 +44,35 @@ struct HomeView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(ble: ble, nfc: nfc)
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
     }
 
-    // ─── 背景 ───
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [Color(red: 0.05, green: 0.07, blue: 0.12), Color(red: 0.1, green: 0.13, blue: 0.22)],
-            startPoint: .top, endPoint: .bottom
-        )
+    // ─── 背景: 自定义图片(带暗角遮罩方便看清文字) 或 默认深色渐变 ───
+    private var backgroundLayer: some View {
+        ZStack {
+            if let img = background.image {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(
+                        LinearGradient(
+                            colors: [.black.opacity(0.35), .black.opacity(0.65)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+            } else {
+                LinearGradient(
+                    colors: [Color(red: 0.05, green: 0.07, blue: 0.12), Color(red: 0.1, green: 0.13, blue: 0.22)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            }
+        }
         .ignoresSafeArea()
+        .clipped()
     }
 
     // ─── 当前门锁摘要 ───
@@ -58,38 +80,47 @@ struct HomeView: View {
         VStack(spacing: 4) {
             Text(s.deviceId == 0 ? "未配置门锁" : "XN-\(s.deviceId)")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.7))
             if !s.isConfigured() {
                 Text("请先去设置页登录拉取凭证").font(.caption).foregroundStyle(.orange)
             }
         }
     }
 
-    // ─── 中心开门大按钮 ───
+    // ─── 中心开门大按钮 (带呼吸光晕) ───
     private var unlockButton: some View {
         let busy = ble.state == .scanning || ble.state == .connecting || ble.state == .unlocking
-        return Group {
-            if #available(iOS 26.0, *) {
-                Button {
-                    Task { await ble.unlock() }
-                } label: {
-                    unlockButtonLabel(busy: busy)
+        return ZStack {
+            Circle()
+                .fill(buttonTint.opacity(0.35))
+                .frame(width: pulse ? 220 : 190, height: pulse ? 220 : 190)
+                .blur(radius: 24)
+                .opacity(busy ? 0.9 : 0.5)
+
+            Group {
+                if #available(iOS 26.0, *) {
+                    Button {
+                        Task { await ble.unlock() }
+                    } label: {
+                        unlockButtonLabel(busy: busy)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(buttonTint)
+                    .disabled(busy || !s.isConfigured())
+                } else {
+                    Button {
+                        Task { await ble.unlock() }
+                    } label: {
+                        unlockButtonLabel(busy: busy)
+                            .background(Circle().fill(buttonTint))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(busy || !s.isConfigured())
                 }
-                .buttonStyle(.glassProminent)
-                .tint(buttonTint)
-                .disabled(busy || !s.isConfigured())
-            } else {
-                Button {
-                    Task { await ble.unlock() }
-                } label: {
-                    unlockButtonLabel(busy: busy)
-                        .background(Circle().fill(buttonTint))
-                }
-                .buttonStyle(.plain)
-                .disabled(busy || !s.isConfigured())
             }
+            .frame(width: 180, height: 180)
         }
-        .frame(width: 180, height: 180)
+        .frame(width: 220, height: 220)
     }
 
     private func unlockButtonLabel(busy: Bool) -> some View {
@@ -145,10 +176,10 @@ struct HomeView: View {
     private var nfcHintRow: some View {
         HStack(spacing: 8) {
             Image(systemName: nfc.isScanning ? "wave.3.right.circle.fill" : "wave.3.right.circle")
-                .foregroundStyle(nfc.isScanning ? .green : .white.opacity(0.4))
+                .foregroundStyle(nfc.isScanning ? .green : .white.opacity(0.5))
             Text(nfc.isScanning ? "NFC 持续监听中，碰锁即开" : nfc.statusText)
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.7))
         }
     }
 }
