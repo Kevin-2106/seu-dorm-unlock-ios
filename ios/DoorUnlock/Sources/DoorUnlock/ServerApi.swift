@@ -87,13 +87,22 @@ enum ServerApi {
         return String(data: decoded, encoding: .utf8) ?? ""
     }
 
+    /// org.json 的 optString 会自动把数字类型转成字符串；JSONSerialization 不会，
+    /// 必须手动兜底 NSNumber —— 否则像 server_appid/server_id 这种服务器返回数字的字段，
+    /// `as? String` 直接拿空，后续签名必填参数缺失，被服务器判定 api_sign_error。
+    private static func anyToString(_ v: Any?) -> String {
+        if let s = v as? String { return s }
+        if let n = v as? NSNumber { return n.stringValue }
+        return ""
+    }
+
     private static func parseServerInfo(_ info: [String: Any]) {
         let s = SettingsManager.shared
-        if let v = info["server_addr"] as? String, !v.isEmpty { s.projectServerUrl = v }
-        if let v = info["appsecret"] as? String, !v.isEmpty { s.projectSignKey = v }
-        if let v = info["session_secret"] as? String, !v.isEmpty { s.projectSessionKey = v }
-        if let v = info["server_appid"] as? String, !v.isEmpty { s.serverAppId = v }
-        if let v = info["server_id"] as? String, !v.isEmpty { s.serverId = v }
+        let srv = anyToString(info["server_addr"]); if !srv.isEmpty { s.projectServerUrl = srv }
+        let secret = anyToString(info["appsecret"]); if !secret.isEmpty { s.projectSignKey = secret }
+        let sessionSecret = anyToString(info["session_secret"]); if !sessionSecret.isEmpty { s.projectSessionKey = sessionSecret }
+        let serverAppId = anyToString(info["server_appid"]); if !serverAppId.isEmpty { s.serverAppId = serverAppId }
+        let serverId = anyToString(info["server_id"]); if !serverId.isEmpty { s.serverId = serverId }
     }
 
     /// gt 客户端签名: 自动注入 user_id/pid/appid/identitycode
@@ -200,8 +209,8 @@ enum ServerApi {
                     if token.isEmpty { token = dj["platform_token"] as? String ?? "" }
                     if let userInfo = dj["user_info"] as? [String: Any] {
                         logD("user_info keys=\(userInfo.keys.sorted())")
-                        let uid = userInfo["id"] as? String ?? (userInfo["id"] as? NSNumber)?.stringValue ?? ""
-                        let idCode = userInfo["identity_code"] as? String ?? ""
+                        let uid = anyToString(userInfo["id"])
+                        let idCode = anyToString(userInfo["identity_code"])
                         if !uid.isEmpty { s.userId = uid }
                         if !idCode.isEmpty { s.identityCode = idCode }
                     } else {
