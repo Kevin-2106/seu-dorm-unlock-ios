@@ -42,7 +42,7 @@ struct ContentView: View {
     }
 
     private var mainView: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("账号登录 (用于获取/刷新凭证)") {
                     TextField("手机号", text: $phone).keyboardType(.phonePad)
