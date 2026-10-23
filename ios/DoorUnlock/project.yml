@@ -1,0 +1,37 @@
+name: DoorUnlock
+options:
+  bundleIdPrefix: com.selfuse.doorunlock
+  deploymentTarget:
+    iOS: "15.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_BITCODE: NO
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+
+targets:
+  DoorUnlock:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources/DoorUnlock
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: 门锁(自用版)
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities: [armv7]
+        NSBluetoothAlwaysUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
+        NSBluetoothPeripheralUsageDescription: 需要蓝牙连接宿舍门锁以发送开锁指令
+        NFCReaderUsageDescription: 需要读取门锁感应区以发送开锁指令
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.selfuse.doorunlock
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES

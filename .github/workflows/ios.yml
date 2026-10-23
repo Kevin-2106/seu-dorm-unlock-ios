@@ -1,0 +1,61 @@
+name: Build iOS (unsigned ipa)
+
+# 只手动触发：macOS runner 分钟数较贵，不挂 push 自动触发，
+# 需要联调时用 `gh workflow run ios.yml` 或在 Actions 页面点 "Run workflow"。
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 查看默认 Xcode 版本
+        run: xcodebuild -version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 .xcodeproj
+        working-directory: ios/DoorUnlock
+        run: xcodegen generate
+
+      - name: 构建 (真机架构，不签名)
+        working-directory: ios/DoorUnlock
+        run: |
+          set -o pipefail
+          xcodebuild -project DoorUnlock.xcodeproj \
+            -scheme DoorUnlock \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            build 2>&1 | tee build.log
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "===== 构建失败，日志末尾 300 行 ====="
+            tail -300 build.log
+            exit $STATUS
+          fi
+
+      - name: 打包为未签名 ipa (交给越狱机 TrollStore 侧载/重签)
+        working-directory: ios/DoorUnlock
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "DoorUnlock.app" -path "*Release-iphoneos*" | head -1)
+          echo "APP_PATH=$APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr DoorUnlock-unsigned.ipa Payload
+          ls -la DoorUnlock-unsigned.ipa
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: DoorUnlock-unsigned-ipa
+          path: ios/DoorUnlock/DoorUnlock-unsigned.ipa
+          if-no-files-found: error
