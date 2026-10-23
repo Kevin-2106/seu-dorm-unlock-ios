@@ -28,6 +28,10 @@ jobs:
           fi
           xcodebuild -version
 
+      - name: 协议层单元测试 (Crypto.swift，与上游 Kotlin 测试向量比对)
+        working-directory: ios/DoorUnlock
+        run: swift test
+
       - name: 安装 XcodeGen
         run: brew install xcodegen
 
@@ -45,10 +49,14 @@ jobs:
           else
             VERSION="1.0"
           fi
-          echo "version=$VERSION build号=${{ github.run_number }} commit=$COMMIT"
+          # 构建号用 UTC 时间戳 (YYMMDDHHmm)，单调递增，不依赖仓库/工作流的 run 编号，
+          # 避免 SideStore 因为"新版 build 号比已装的小"而拒绝覆盖安装。
+          BUILD=$(date -u +%y%m%d%H%M)
+          echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
+          echo "version=$VERSION build号=$BUILD commit=$COMMIT"
           xcodebuild -project DoorUnlock.xcodeproj \
             MARKETING_VERSION=$VERSION \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION=$BUILD \
             BUILD_COMMIT=$COMMIT \
             -scheme DoorUnlock \
             -configuration Release \
@@ -118,4 +126,4 @@ jobs:
             ad-hoc 签名的 `.ipa`，用 TrollStore / SideStore 安装。安装与使用见 [README](https://github.com/${{ github.repository }}#安装)。
 
             - NFC 开门需要 TrollStore / 越狱 / 付费开发者账号；SideStore + 免费 Apple ID 只能用蓝牙。
-            - 构建号 ${{ github.run_number }}，commit `${{ github.sha }}`。
+            - 构建号 ${{ env.BUILD_NUMBER }}，commit `${{ github.sha }}`。

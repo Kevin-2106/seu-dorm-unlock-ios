@@ -1,7 +1,27 @@
 import SwiftUI
 
 /// 视觉/震动参数调节页。所有滑块直接绑定 Tuning.shared，改完回首页立刻生效，不用重新构建。
+/// 视觉/震动参数调节。入口页分成三个子页，所有滑块直接绑定 Tuning.shared，改完回首页立刻生效。
 struct TuningView: View {
+    @ObservedObject private var tuning = Tuning.shared
+
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink("按钮与圆环") { TuningButtonView() }
+                NavigationLink("开门动效") { TuningEffectsView() }
+                NavigationLink("震动") { TuningHapticsView() }
+            }
+            Section {
+                Button("恢复全部默认值", role: .destructive) { tuning.reset() }
+            }
+        }
+        .navigationTitle("视觉与震动调节")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct TuningButtonView: View {
     @ObservedObject private var tuning = Tuning.shared
 
     var body: some View {
@@ -25,7 +45,17 @@ struct TuningView: View {
             } footer: {
                 Text("0 = 完全关闭。手机放桌上不会动，拿起来才有效果。")
             }
+        }
+        .navigationTitle("按钮与圆环")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
 
+private struct TuningEffectsView: View {
+    @ObservedObject private var tuning = Tuning.shared
+
+    var body: some View {
+        Form {
             Section("开门中 (蓄力)") {
                 SliderRow(title: "蓄力时长(秒)", value: $tuning.chargeSeconds, range: 0.8...6)
                 SliderRow(title: "背景变暗程度", value: $tuning.dim, range: 0...0.9)
@@ -48,7 +78,17 @@ struct TuningView: View {
                 SliderRow(title: "跃迁速度", value: $tuning.warpSpeed, range: 0.2...3)
                 SliderRow(title: "跃迁拖尾长度", value: $tuning.warpStreak, range: 0...3)
             }
+        }
+        .navigationTitle("开门动效")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
 
+private struct TuningHapticsView: View {
+    @ObservedObject private var tuning = Tuning.shared
+
+    var body: some View {
+        Form {
             Section {
                 Toggle("启用震动", isOn: $tuning.hapticsOn)
                 SliderRow(title: "搜索嗡鸣强度", value: $tuning.hSearchIntensity, range: 0...1)
@@ -61,17 +101,11 @@ struct TuningView: View {
                 }
                 Button("试震: 成功") { Haptics.success() }
                 Button("试震: 失败") { Haptics.failure() }
-            } header: {
-                Text("震动")
             } footer: {
                 Text("iPhone 8 及以上用 CoreHaptics (可调强度/锐度)；iPhone 7 不支持，自动回退到系统震动，滑块对它无效。")
             }
-
-            Section {
-                Button("恢复全部默认值", role: .destructive) { tuning.reset() }
-            }
         }
-        .navigationTitle("视觉与震动调节")
+        .navigationTitle("震动")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

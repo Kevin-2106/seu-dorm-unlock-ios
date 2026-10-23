@@ -26,6 +26,7 @@
 
 ## 构建流程
 
+0. **协议层单元测试**：`swift test` 跑 `Tests/CryptoTests`，期望值是上游 Kotlin 实现的测试向量，Swift 移植必须逐字节一致。本地也可以在 `ios/DoorUnlock` 下直接运行。
 1. **选最新的 Xcode**：runner 上装了多个版本，选编号最大的。XcodeGen 生成的工程格式可能比默认 Xcode 新。
 2. **XcodeGen 生成工程**：由 `ios/DoorUnlock/project.yml` 生成 `.xcodeproj`，不把工程文件提交进仓库。
 3. **`xcodebuild` 构建**：真机架构（`arm64`），**不签名**。
@@ -69,7 +70,7 @@ CI 日志里会打印签名里实际的 entitlements、`PlugIns` 目录内容和
 | 字段 | 来源 |
 |---|---|
 | `CFBundleShortVersionString`（版本） | 打 tag 时取 tag（去掉 `v`）；手动触发时是 `1.0` |
-| `CFBundleVersion`（构建号） | GitHub Actions 的运行编号（`github.run_number`），每次递增 |
+| `CFBundleVersion`（构建号） | 构建时的 UTC 时间戳 `YYMMDDHHmm`（例 `2610241530`），单调递增，避免侧载工具嫌新版构建号更小 |
 | `BuildCommit` | `git rev-parse --short HEAD` |
 
 App 首页底部和「设置 → 关于」会显示 `v1.0 (build N · commit)`，用来确认装上的是哪一版。扩展的版本号和主 App 保持一致（系统要求）。
