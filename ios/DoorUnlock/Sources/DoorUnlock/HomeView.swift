@@ -571,9 +571,9 @@ struct HomeView: View {
 
     private var labelContent: some View {
         VStack(spacing: 10) {
-            Image(systemName: !s.isConfigured() ? "person.crop.circle" : (busy && ble.canCancel ? "xmark" : (ble.state == .success ? "lock.open.fill" : "lock.fill")))
+            Image(systemName: !s.isConfigured() ? "person.crop.circle" : (ble.state == .success ? "lock.open.fill" : "lock.fill"))
                 .font(.system(size: 44, weight: .semibold))
-            Text(!s.isConfigured() ? "去登录" : (busy ? (ble.canCancel ? "点按取消" : "开锁中") : (primaryIsNFC ? "NFC 开门" : "开门")))
+            Text(!s.isConfigured() ? "去登录" : (busy ? "开门中" : (primaryIsNFC ? "NFC 开门" : "开门")))
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
         }
         .foregroundStyle(.white)
